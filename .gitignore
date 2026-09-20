@@ -54,3 +54,5 @@ proguard/
 /*.png
 /*.jpg
 /*.jpeg
+
+/backup/
