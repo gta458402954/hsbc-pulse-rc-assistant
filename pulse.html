@@ -1,0 +1,962 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="author" content="Emohappy">
+  <meta name="theme-color" content="#b91c1c">
+  <title>汇丰 Pulse RC 记账助手</title>
+  <style>
+    :root {
+      --primary: #db0011;
+      --primary-dark: #b91c1c;
+      --primary-light: #fee2e2;
+      --bg: #f8fafc;
+      --card-bg: #ffffff;
+      --text: #0f172a;
+      --text-muted: #64748b;
+      --border: #e2e8f0;
+      --success: #16a34a;
+      --warning: #d97706;
+      --pending-bg: #fffbeb;
+      --pending-border: #fde68a;
+      --pending-text: #b45309;
+      --radius: 16px;
+      --shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; -webkit-tap-highlight-color: transparent; }
+    body { background-color: var(--bg); color: var(--text); padding-bottom: 40px; min-height: 100vh; }
+    .header { background: linear-gradient(135deg, #db0011, #99000b); color: white; padding: 22px 18px 18px; border-bottom-left-radius: 24px; border-bottom-right-radius: 24px; box-shadow: 0 8px 24px rgba(219, 0, 17, 0.25); }
+    .header-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+    .header-title { font-size: 18px; font-weight: 700; display: flex; align-items: center; gap: 6px; }
+    .settings-btn { background: rgba(255, 255, 255, 0.2); border: none; color: white; padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; cursor: pointer; }
+    .stat-hero { background: rgba(255, 255, 255, 0.12); border-radius: 18px; padding: 14px 16px; border: 1px solid rgba(255, 255, 255, 0.2); }
+    .stat-hero-label { font-size: 12px; color: rgba(255, 255, 255, 0.85); font-weight: 500; display: flex; justify-content: space-between; }
+    .stat-hero-value { font-size: 32px; font-weight: 800; margin: 2px 0 6px; }
+    .stat-sub-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; border-top: 1px solid rgba(255, 255, 255, 0.15); padding-top: 8px; }
+    .stat-sub-item { font-size: 11px; color: rgba(255, 255, 255, 0.9); }
+    .stat-sub-item b { font-size: 13px; color: #fff; }
+    .container { padding: 16px; max-width: 500px; margin: 0 auto; }
+    .card { background: var(--card-bg); border-radius: var(--radius); padding: 16px; margin-bottom: 16px; box-shadow: var(--shadow); border: 1px solid var(--border); }
+    .card-title { font-size: 14px; font-weight: 700; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
+    .progress-item { margin-bottom: 12px; }
+    .progress-item:last-child { margin-bottom: 0; }
+    .progress-labels { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; }
+    .progress-title { font-weight: 600; }
+    .progress-val { color: var(--text-muted); font-size: 11px; }
+    .progress-bar-bg { height: 7px; background: #e2e8f0; border-radius: 10px; overflow: hidden; }
+    .progress-bar-fill { height: 100%; background: var(--primary); border-radius: 10px; transition: width 0.3s ease; }
+    .input-label { font-size: 12px; font-weight: 600; color: var(--text-muted); margin-bottom: 6px; display: block; }
+    .amount-input-box { position: relative; margin-bottom: 14px; }
+    .amount-symbol { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); font-size: 22px; font-weight: 700; color: var(--primary); }
+    .amount-input { width: 100%; padding: 12px 14px 12px 38px; font-size: 22px; font-weight: 700; border-radius: 12px; border: 2px solid var(--border); outline: none; background: #fafafa; }
+    .amount-input:focus { border-color: var(--primary); background: #fff; }
+    .datetime-input { width: 100%; padding: 10px 12px; font-size: 13px; border-radius: 10px; border: 1.5px solid var(--border); outline: none; background: #fafafa; margin-bottom: 14px; }
+    .chip-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-bottom: 14px; }
+    .chip-grid.tri { grid-template-columns: repeat(3, 1fr); }
+    .chip { padding: 9px 6px; text-align: center; border: 1.5px solid var(--border); border-radius: 12px; background: #fff; font-size: 12px; font-weight: 600; cursor: pointer; color: var(--text-muted); }
+    .chip.active { border-color: var(--primary); background: var(--primary-light); color: var(--primary); }
+    .preview-box { background: #fff7ed; border: 1px solid #fed7aa; border-radius: 12px; padding: 12px; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center; }
+    .preview-left { font-size: 12px; color: #9a3412; }
+    .preview-breakdown { font-size: 11px; color: #c2410c; margin-top: 2px; }
+    .preview-right { text-align: right; min-width: 90px; }
+    .preview-rc { font-size: 17px; font-weight: 800; color: var(--primary); }
+    .preview-pct { font-size: 11px; color: var(--warning); font-weight: 700; }
+    .btn-submit { width: 100%; padding: 13px; background: var(--primary); color: white; font-size: 15px; font-weight: 700; border: none; border-radius: 12px; box-shadow: 0 4px 12px rgba(219, 0, 17, 0.3); cursor: pointer; }
+    .btn-submit:active { transform: scale(0.98); }
+    .history-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #f1f5f9; }
+    .history-item:last-child { border-bottom: none; }
+    .history-item.welcome-award { background: #fdf4ff; border-radius: 12px; padding: 12px; margin: 6px 0; border: 1px solid #f0abfc; }
+    .h-info { display: flex; flex-direction: column; gap: 3px; max-width: 60%; }
+    .h-title { font-size: 13px; font-weight: 600; }
+    .h-meta { font-size: 11px; color: var(--text-muted); display: flex; gap: 6px; align-items: center; }
+    .h-badge { background: #f1f5f9; padding: 2px 6px; border-radius: 4px; font-size: 10px; }
+    .h-breakdown-tags { font-size: 10px; color: #ea580c; margin-top: 2px; }
+    .h-right { text-align: right; }
+    .h-rc { font-size: 14px; font-weight: 700; color: var(--primary); }
+    .h-amt { font-size: 11px; color: var(--text-muted); }
+    .h-actions { display: flex; align-items: center; gap: 4px; }
+    .btn-action { background: none; border: none; font-size: 14px; padding: 4px 6px; cursor: pointer; border-radius: 6px; }
+    .btn-edit { color: #0284c7; }
+    .btn-del { color: #94a3b8; }
+    .badge-pending { background: #fffbeb; color: #b45309; border: 1px solid #fde68a; padding: 1px 5px; border-radius: 4px; font-size: 9px; }
+    
+    .data-tools { display: flex; gap: 10px; font-size: 11px; }
+    .data-tools span { color: var(--primary); cursor: pointer; font-weight: 600; }
+    
+    .footer-copyright {
+      text-align: center;
+      margin-top: 24px;
+      margin-bottom: 12px;
+      font-size: 12px;
+      color: var(--text-muted);
+      line-height: 1.6;
+    }
+    .footer-copyright .author-badge {
+      display: inline-block;
+      background: #f1f5f9;
+      color: #334155;
+      padding: 3px 10px;
+      border-radius: 12px;
+      font-weight: 600;
+      border: 1px solid #e2e8f0;
+      margin-top: 4px;
+    }
+
+    /* Modals */
+    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.5); z-index: 999; align-items: flex-end; justify-content: center; }
+    .modal-overlay.open { display: flex; }
+    .modal { background: #fff; width: 100%; max-width: 500px; border-top-left-radius: 20px; border-top-right-radius: 20px; padding: 20px 18px 30px; max-height: 85vh; overflow-y: auto; }
+    .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; font-size: 16px; font-weight: 700; }
+    .setting-group { border-bottom: 1px solid var(--border); padding: 12px 0; }
+    .setting-group:last-of-type { border-bottom: none; }
+    .setting-row { display: flex; justify-content: space-between; align-items: center; }
+    .setting-label { font-size: 13px; font-weight: 600; }
+    .setting-desc { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+    .config-sub-grid { margin-top: 8px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .config-sub-grid .config-item { display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: var(--text-muted); }
+    .config-sub-grid input { padding: 6px 8px; border: 1px solid var(--border); border-radius: 8px; font-size: 12px; background: #fafafa; }
+    .switch { position: relative; display: inline-block; width: 44px; height: 24px; flex-shrink: 0; }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider { position: absolute; cursor: pointer; inset: 0; background-color: #cbd5e1; transition: .3s; border-radius: 24px; }
+    .slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background-color: white; transition: .3s; border-radius: 50%; }
+    input:checked + .slider { background-color: var(--primary); }
+    input:checked + .slider:before { transform: translateX(20px); }
+    .btn-secondary { background: #f1f5f9; color: var(--text); border: 1px solid var(--border); padding: 10px; border-radius: 10px; font-size: 12px; font-weight: 600; width: 100%; margin-top: 10px; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="header-top">
+      <div class="header-title"><span>💳 HSBC Pulse RC 助手</span></div>
+      <button class="settings-btn" onclick="openSettings()">⚙️ 规则与达标设置</button>
+    </div>
+    <div class="stat-hero">
+      <div class="stat-hero-label">
+        <span>已落袋总奖赏钱 (已达标)</span>
+        <span id="pendingStatText" style="color: #fde047; font-size: 11px;">待达标: +0.00 RC</span>
+      </div>
+      <div class="stat-hero-value" id="totalRC">0.00 <span style="font-size:15px; font-weight:500;">RC</span></div>
+      <div class="stat-sub-grid">
+        <div class="stat-sub-item">累计总消费: <b id="totalSpend">¥0.00</b></div>
+        <div class="stat-sub-item">实际到手返现率: <b id="avgRate">0.0%</b></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="card">
+      <div class="card-title">
+        <span>📊 达标与额度池跟踪</span>
+        <span style="font-size:11px; font-weight:normal; color:var(--text-muted);" id="currentMonthStr">本月统计</span>
+      </div>
+      
+      <!-- 迎新礼 -->
+      <div class="progress-item" id="welcomeProgressBox">
+        <div class="progress-labels">
+          <span class="progress-title" id="welcomeCardTitle">🎁 迎新礼</span>
+          <span class="progress-val" id="welcomeProgressText">¥0 / ¥8,000</span>
+        </div>
+        <div class="progress-bar-bg"><div class="progress-bar-fill" id="welcomeProgressBar" style="width: 0%; background: #7c3aed;"></div></div>
+        <div style="font-size: 10px; margin-top: 4px;" id="welcomeStatusHint">发卡60天内消费满额触发独立大礼包</div>
+      </div>
+
+      <!-- 当月有效签账门槛 -->
+      <div class="progress-item" id="diningProgressBox" style="margin-top: 12px;">
+        <div class="progress-labels">
+          <span class="progress-title" id="diningCardTitle">🍔 当月内地餐饮 (3% / 封顶 80 RC)</span>
+          <span class="progress-val" id="diningProgressText">0.0 / 80 RC</span>
+        </div>
+        <div class="progress-bar-bg"><div class="progress-bar-fill" id="diningProgressBar" style="width: 0%; background: #ea580c;"></div></div>
+        <div style="font-size: 10px; margin-top: 4px;" id="diningStatusHint">当月全场景消费满 ¥1,200 激活餐饮 3%，封顶 80 RC</div>
+      </div>
+
+      <!-- Pulse 2% -->
+      <div class="progress-item" style="margin-top: 12px;">
+        <div class="progress-labels">
+          <span class="progress-title">⚡ Pulse 2% 特别奖赏 (年上限 1,600 RC)</span>
+          <span class="progress-val" id="pulseProgressText">0.0 / 1,600 RC</span>
+        </div>
+        <div class="progress-bar-bg"><div class="progress-bar-fill" id="pulseProgressBar" style="width: 0%; background: #db0011;"></div></div>
+      </div>
+
+      <!-- 最红 2% -->
+      <div class="progress-item" style="margin-top: 12px;" id="redProgressBox">
+        <div class="progress-labels">
+          <span class="progress-title">🌍 最红自主 2% (年上限 2,000 RC)</span>
+          <span class="progress-val" id="redProgressText">0.0 / 2,000 RC</span>
+        </div>
+        <div class="progress-bar-bg"><div class="progress-bar-fill" id="redProgressBar" style="width: 0%; background: #0284c7;"></div></div>
+      </div>
+    </div>
+
+    <!-- 添加消费记录 -->
+    <div class="card">
+      <div class="card-title"><span>✏️ 添加消费记录</span></div>
+      <label class="input-label">消费时间 (支持补录)</label>
+      <input type="datetime-local" id="txDateTime" class="datetime-input" onchange="calculateLivePreview()">
+      <label class="input-label">消费金额 (CNY / HKD)</label>
+      <div class="amount-input-box">
+        <span class="amount-symbol">¥</span>
+        <input type="number" step="0.01" inputmode="decimal" id="txAmount" class="amount-input" placeholder="0.00" oninput="calculateLivePreview()">
+      </div>
+      <label class="input-label">支付通道</label>
+      <div class="chip-grid" id="channelGrid">
+        <div class="chip active" onclick="selectChannel('unionpay_app', this)">🟢 你好中国 / 云闪付</div>
+        <div class="chip" onclick="selectChannel('apple_pay', this)">⚫ Apple Pay (美团/京东)</div>
+        <div class="chip" onclick="selectChannel('wechat_alipay', this)">🔵 微信 / 支付宝</div>
+        <div class="chip" onclick="selectChannel('physical_pos', this)">⚪ 实体卡刷卡</div>
+      </div>
+      <label class="input-label">消费场景</label>
+      <div class="chip-grid tri" id="categoryGrid">
+        <div class="chip active" onclick="selectCategory('dining', this)">🍲 内地餐饮</div>
+        <div class="chip" onclick="selectCategory('daily', this)">🛍️ 日常消费</div>
+        <div class="chip" onclick="selectCategory('travel', this)">✈️ 外币/旅行</div>
+      </div>
+      <div class="preview-box">
+        <div class="preview-left">
+          <div>预计本笔获得奖赏钱</div>
+          <div class="preview-breakdown" id="previewDetail">基础 0.4% + Pulse 2% + 最红 2% + 餐饮 3%</div>
+        </div>
+        <div class="preview-right">
+          <div class="preview-rc" id="previewRC">+0.00 RC</div>
+          <div class="preview-pct" id="previewRate">返现率 0.0%</div>
+        </div>
+      </div>
+      <button class="btn-submit" onclick="addTransaction()">确认保存入账</button>
+    </div>
+
+    <!-- 交易明细 -->
+    <div class="card">
+      <div class="card-title">
+        <span>📋 交易明细 (按时间排序)</span>
+        <div class="data-tools">
+          <span onclick="triggerFileInput()">📥 导入备份</span>
+          <span onclick="exportData()">📤 导出备份</span>
+        </div>
+      </div>
+      <!-- 隐藏的文件选择输入框 -->
+      <input type="file" id="jsonFileInput" accept=".json" style="display:none;" onchange="importData(event)">
+      <div id="txListContainer"><div style="text-align:center; padding: 20px; color: var(--text-muted); font-size:12px;">暂无消费记录</div></div>
+    </div>
+
+    <!-- 底部版权与创作者注明 -->
+    <div class="footer-copyright">
+      <div>HSBC Pulse RC Tracker</div>
+      <div class="author-badge">✨ 产权注明 · 创建者：Emohappy</div>
+    </div>
+  </div>
+
+  <!-- 编辑单笔交易弹窗 -->
+  <div class="modal-overlay" id="editModal" onclick="closeEditModal(event)">
+    <div class="modal" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <span>✏️ 修改消费记录</span>
+        <span style="cursor:pointer; font-size:18px;" onclick="closeEditModal()">✕</span>
+      </div>
+      <input type="hidden" id="editTxId">
+      
+      <label class="input-label">消费时间</label>
+      <input type="datetime-local" id="editTxDateTime" class="datetime-input">
+      
+      <label class="input-label">消费金额 (CNY / HKD)</label>
+      <div class="amount-input-box">
+        <span class="amount-symbol">¥</span>
+        <input type="number" step="0.01" inputmode="decimal" id="editTxAmount" class="amount-input" placeholder="0.00">
+      </div>
+      
+      <label class="input-label">支付通道</label>
+      <div class="chip-grid" id="editChannelGrid">
+        <div class="chip" onclick="selectEditChannel('unionpay_app', this)">🟢 你好中国 / 云闪付</div>
+        <div class="chip" onclick="selectEditChannel('apple_pay', this)">⚫ Apple Pay</div>
+        <div class="chip" onclick="selectEditChannel('wechat_alipay', this)">🔵 微信 / 支付宝</div>
+        <div class="chip" onclick="selectEditChannel('physical_pos', this)">⚪ 实体卡刷卡</div>
+      </div>
+      
+      <label class="input-label">消费场景</label>
+      <div class="chip-grid tri" id="editCategoryGrid">
+        <div class="chip" onclick="selectEditCategory('dining', this)">🍲 内地餐饮</div>
+        <div class="chip" onclick="selectEditCategory('daily', this)">🛍️ 日常消费</div>
+        <div class="chip" onclick="selectEditCategory('travel', this)">✈️ 外币/旅行</div>
+      </div>
+
+      <button class="btn-submit" style="margin-top:8px;" onclick="saveEditedTransaction()">保存修改</button>
+      <button class="btn-secondary" onclick="closeEditModal()">取消</button>
+    </div>
+  </div>
+
+  <!-- 设置弹窗 -->
+  <div class="modal-overlay" id="settingsModal" onclick="closeSettings(event)">
+    <div class="modal" onclick="event.stopPropagation()">
+      <div class="modal-header"><span>⚙️ 活动报名与达标门槛配置</span><span style="cursor:pointer; font-size:18px;" onclick="closeSettings()">✕</span></div>
+      
+      <!-- 迎新礼设置 -->
+      <div class="setting-group">
+        <div class="setting-row">
+          <div><div class="setting-label">开卡迎新礼活动</div><div class="setting-desc">发卡60天内消费满额单独发放一条奖励</div></div>
+          <label class="switch"><input type="checkbox" id="setWelcome" onchange="saveSettings()"><span class="slider"></span></label>
+        </div>
+        <div class="config-sub-grid">
+          <div class="config-item"><span>发卡日期:</span><input type="date" id="setCardIssueDate" onchange="saveSettings()"></div>
+          <div class="config-item"><span>达标消费门槛 (¥):</span><input type="number" id="setWelcomeSpendThreshold" value="8000" onchange="saveSettings()"></div>
+        </div>
+        <div class="setting-row" style="margin-top: 10px; border-top: 1px dashed var(--border); padding-top: 10px;">
+          <div>
+            <div class="setting-label" style="font-size:13px;">填了推荐码 (+1,000 RC)</div>
+            <div class="setting-desc">开启享 1,800 RC / 关闭享标准 800 RC</div>
+          </div>
+          <label class="switch"><input type="checkbox" id="setHasReferralCode" onchange="saveSettings()"><span class="slider"></span></label>
+        </div>
+      </div>
+
+      <!-- 内地签账餐饮 -->
+      <div class="setting-group">
+        <div class="setting-row">
+          <div><div class="setting-label">内地签账特别奖赏 (餐饮)</div><div class="setting-desc">当月全场景有效签账满额激活餐饮 3%</div></div>
+          <label class="switch"><input type="checkbox" id="setChinaDining" onchange="saveSettings()"><span class="slider"></span></label>
+        </div>
+        <div class="config-sub-grid">
+          <div class="config-item"><span>报名生效日期:</span><input type="date" id="setChinaDiningDate" onchange="saveSettings()"></div>
+          <div class="config-item"><span>返现比例 (%):</span><input type="number" id="setDiningRate" value="3" step="0.5" onchange="saveSettings()"></div>
+          <div class="config-item"><span>单月 RC 封顶 (RC):</span><input type="number" id="setDiningMonthlyCap" value="80" step="1" onchange="saveSettings()"></div>
+          <div class="config-item"><span>月总消费达标门槛 (¥):</span><input type="number" id="setDiningMinSpend" value="1200" step="100" onchange="saveSettings()"></div>
+        </div>
+      </div>
+
+      <!-- 最红自主 -->
+      <div class="setting-group">
+        <div class="setting-row">
+          <div><div class="setting-label">最红自主奖赏 (赏世界 5X)</div><div class="setting-desc">额外 2% RC (含微信/支付宝)</div></div>
+          <label class="switch"><input type="checkbox" id="setRedReward" onchange="saveSettings()"><span class="slider"></span></label>
+        </div>
+        <div class="config-sub-grid"><div class="config-item" style="grid-column: span 2;"><span>报名生效日期:</span><input type="date" id="setRedDate" onchange="saveSettings()"></div></div>
+      </div>
+
+      <!-- Travel Guru -->
+      <div class="setting-group">
+        <div class="setting-row">
+          <div><div class="setting-label">Travel Guru 等级</div><div class="setting-desc">外币旅游额外返现</div></div>
+          <select id="setGuruLevel" onchange="saveSettings()" style="padding:5px; border-radius:8px; border:1px solid var(--border); font-size:12px;">
+            <option value="0">未登记 / 无</option><option value="1">第一级 (3%)</option><option value="2">第二级 (4%)</option><option value="3">第三级 (6%)</option>
+          </select>
+        </div>
+        <div class="config-sub-grid"><div class="config-item" style="grid-column: span 2;"><span>生效日期:</span><input type="date" id="setGuruDate" onchange="saveSettings()"></div></div>
+      </div>
+
+      <div style="text-align:center; padding-top:12px; font-size:11px; color:var(--text-muted);">
+        创建者：Emohappy · 汇丰 Pulse RC 助手
+      </div>
+
+      <button class="btn-secondary" onclick="clearAllData()">🗑️ 清空所有数据</button>
+      <button class="btn-secondary" style="margin-top:8px; background:var(--primary); color:#fff; border:none;" onclick="closeSettings()">完成</button>
+    </div>
+  </div>
+
+  <script>
+    const STORAGE_KEY = 'hsbc_pulse_tracker_v3_3';
+    const todayStr = new Date().toISOString().substring(0, 10);
+
+    let state = {
+      transactions: [],
+      settings: {
+        redReward: true,
+        redRegDate: '2026-01-01',
+        chinaDining: true,
+        chinaDiningDate: '2026-01-01',
+        diningRate: 3.0,
+        diningMonthlyCap: 80.0,
+        diningMinSpend: 1200.0,
+        welcome: true,
+        cardIssueDate: todayStr,
+        welcomeSpendThreshold: 8000.0,
+        hasReferralCode: true,
+        guruLevel: 0,
+        guruRegDate: '2026-01-01'
+      },
+      currentInput: { channel: 'unionpay_app', category: 'dining' },
+      editInput: { channel: 'unionpay_app', category: 'dining' }
+    };
+    const CAPS = { pulseRC: 1600.0, redRC: 2000.0, guruRC: { 1: 500.0, 2: 1200.0, 3: 2200.0 } };
+
+    let systemAwards = [];
+
+    function formatDateTimeLocal(d) {
+      const pad = n => String(n).padStart(2, '0');
+      return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    }
+
+    function init() {
+      // 兼容读取旧版本的缓存数据
+      const saved = localStorage.getItem(STORAGE_KEY) || 
+                    localStorage.getItem('hsbc_pulse_tracker_v3_2') || 
+                    localStorage.getItem('hsbc_pulse_tracker_v3_0') || 
+                    localStorage.getItem('hsbc_pulse_tracker_v2_9');
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          state.transactions = parsed.transactions || [];
+          state.settings = { ...state.settings, ...parsed.settings };
+        } catch (e) { console.error(e); }
+      }
+      document.getElementById('txDateTime').value = formatDateTimeLocal(new Date());
+      document.getElementById('setRedReward').checked = state.settings.redReward;
+      document.getElementById('setRedDate').value = state.settings.redRegDate || '2026-01-01';
+      document.getElementById('setChinaDining').checked = state.settings.chinaDining;
+      document.getElementById('setChinaDiningDate').value = state.settings.chinaDiningDate || '2026-01-01';
+      document.getElementById('setDiningRate').value = state.settings.diningRate || 3;
+      document.getElementById('setDiningMonthlyCap').value = state.settings.diningMonthlyCap || 80;
+      document.getElementById('setDiningMinSpend').value = state.settings.diningMinSpend || 1200;
+      
+      document.getElementById('setWelcome').checked = (state.settings.welcome !== undefined ? state.settings.welcome : true);
+      document.getElementById('setCardIssueDate').value = state.settings.cardIssueDate || todayStr;
+      document.getElementById('setWelcomeSpendThreshold').value = state.settings.welcomeSpendThreshold || 8000;
+      document.getElementById('setHasReferralCode').checked = (state.settings.hasReferralCode !== undefined ? state.settings.hasReferralCode : true);
+      
+      document.getElementById('setGuruLevel').value = state.settings.guruLevel;
+      document.getElementById('setGuruDate').value = state.settings.guruRegDate || '2026-01-01';
+      
+      const now = new Date();
+      document.getElementById('currentMonthStr').innerText = `${now.getFullYear()}年${now.getMonth() + 1}月`;
+      recalculateAllAndRender();
+    }
+
+    function saveState() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ transactions: state.transactions, settings: state.settings }));
+    }
+
+    function saveSettings() {
+      state.settings.redReward = document.getElementById('setRedReward').checked;
+      state.settings.redRegDate = document.getElementById('setRedDate').value;
+      state.settings.chinaDining = document.getElementById('setChinaDining').checked;
+      state.settings.chinaDiningDate = document.getElementById('setChinaDiningDate').value;
+      state.settings.diningRate = parseFloat(document.getElementById('setDiningRate').value) || 3;
+      state.settings.diningMonthlyCap = parseFloat(document.getElementById('setDiningMonthlyCap').value) || 80;
+      state.settings.diningMinSpend = parseFloat(document.getElementById('setDiningMinSpend').value) || 1200;
+      state.settings.welcome = document.getElementById('setWelcome').checked;
+      state.settings.cardIssueDate = document.getElementById('setCardIssueDate').value;
+      state.settings.welcomeSpendThreshold = parseFloat(document.getElementById('setWelcomeSpendThreshold').value) || 8000;
+      state.settings.hasReferralCode = document.getElementById('setHasReferralCode').checked;
+      state.settings.guruLevel = parseInt(document.getElementById('setGuruLevel').value, 10);
+      state.settings.guruRegDate = document.getElementById('setGuruDate').value;
+      saveState();
+      recalculateAllAndRender();
+    }
+
+    function selectChannel(ch, el) {
+      state.currentInput.channel = ch;
+      document.querySelectorAll('#channelGrid .chip').forEach(c => c.classList.remove('active'));
+      el.classList.add('active');
+      calculateLivePreview();
+    }
+
+    function selectCategory(cat, el) {
+      state.currentInput.category = cat;
+      document.querySelectorAll('#categoryGrid .chip').forEach(c => c.classList.remove('active'));
+      el.classList.add('active');
+      calculateLivePreview();
+    }
+
+    function selectEditChannel(ch, el) {
+      state.editInput.channel = ch;
+      document.querySelectorAll('#editChannelGrid .chip').forEach(c => c.classList.remove('active'));
+      el.classList.add('active');
+    }
+
+    function selectEditCategory(cat, el) {
+      state.editInput.category = cat;
+      document.querySelectorAll('#editCategoryGrid .chip').forEach(c => c.classList.remove('active'));
+      el.classList.add('active');
+    }
+
+    function openEditModal(id) {
+      const tx = state.transactions.find(t => t.id === id);
+      if (!tx) return;
+
+      document.getElementById('editTxId').value = tx.id;
+      document.getElementById('editTxDateTime').value = tx.dateTime.substring(0, 16);
+      document.getElementById('editTxAmount').value = tx.amount;
+
+      state.editInput.channel = tx.channel;
+      state.editInput.category = tx.category;
+
+      const chChips = document.querySelectorAll('#editChannelGrid .chip');
+      chChips.forEach(c => c.classList.remove('active'));
+      if (tx.channel === 'unionpay_app') chChips[0].classList.add('active');
+      else if (tx.channel === 'apple_pay') chChips[1].classList.add('active');
+      else if (tx.channel === 'wechat_alipay') chChips[2].classList.add('active');
+      else if (tx.channel === 'physical_pos') chChips[3].classList.add('active');
+
+      const catChips = document.querySelectorAll('#editCategoryGrid .chip');
+      catChips.forEach(c => c.classList.remove('active'));
+      if (tx.category === 'dining') catChips[0].classList.add('active');
+      else if (tx.category === 'daily') catChips[1].classList.add('active');
+      else if (tx.category === 'travel') catChips[2].classList.add('active');
+
+      document.getElementById('editModal').classList.add('open');
+    }
+
+    function closeEditModal() {
+      document.getElementById('editModal').classList.remove('open');
+    }
+
+    function saveEditedTransaction() {
+      const id = document.getElementById('editTxId').value;
+      const amt = parseFloat(document.getElementById('editTxAmount').value);
+      const dtVal = document.getElementById('editTxDateTime').value;
+
+      if (isNaN(amt) || amt <= 0) {
+        alert('请输入有效消费金额');
+        return;
+      }
+
+      const tx = state.transactions.find(t => t.id === id);
+      if (tx) {
+        tx.amount = amt;
+        tx.dateTime = dtVal;
+        tx.channel = state.editInput.channel;
+        tx.category = state.editInput.category;
+
+        saveState();
+        closeEditModal();
+        recalculateAllAndRender();
+      }
+    }
+
+    function recalculateAll() {
+      state.transactions.sort((a, b) => new Date(a.dateTime).getTime() - new Date(b.dateTime).getTime());
+      systemAwards = [];
+
+      let cumPulseRC = 0, cumRedRC = 0, cumGuruRC = 0;
+      const dRatePercent = (state.settings.diningRate || 3.0);
+      const dRateDecimal = dRatePercent / 100.0;
+      const diningCap = (state.settings.diningMonthlyCap || 80.0);
+      const diningMinSpend = (state.settings.diningMinSpend || 1200.0);
+
+      // 当月全场景有效签账（非微支）累计满 ¥1,200 即可激活餐饮 3%
+      const monthlyTotalStats = {};
+      state.transactions.forEach(t => {
+        const amt = parseFloat(t.amount) || 0;
+        const monthKey = t.dateTime.substring(0, 7);
+        const isMicroPay = (t.channel === 'wechat_alipay');
+        
+        if (!monthlyTotalStats[monthKey]) {
+          monthlyTotalStats[monthKey] = { totalSpend: 0, isUnlocked: false };
+        }
+        
+        if (!isMicroPay) {
+          monthlyTotalStats[monthKey].totalSpend += amt;
+        }
+      });
+      
+      Object.keys(monthlyTotalStats).forEach(m => {
+        monthlyTotalStats[m].isUnlocked = (monthlyTotalStats[m].totalSpend >= diningMinSpend);
+      });
+
+      // 迎新礼计算
+      let welcomeCumSpend = 0;
+      let welcomeMilestoneTriggered = false;
+      const welcomeThreshold = (state.settings.welcomeSpendThreshold || 8000);
+      const totalWelcomeReward = state.settings.hasReferralCode ? 1800 : 800;
+      
+      const issueDateStr = state.settings.cardIssueDate || todayStr;
+      const issueTime = new Date(issueDateStr + 'T00:00:00').getTime();
+      const expireTime = issueTime + (60 * 24 * 3600 * 1000);
+
+      let monthlyAwardedRC = {};
+
+      state.transactions.forEach(t => {
+        const amt = parseFloat(t.amount) || 0;
+        const txDate = new Date(t.dateTime);
+        const txDateStr = t.dateTime.substring(0, 10);
+        const monthKey = t.dateTime.substring(0, 7);
+        const isMicroPay = (t.channel === 'wechat_alipay');
+        const isMobileUnionPay = (t.channel === 'unionpay_app' || t.channel === 'apple_pay');
+
+        let rcBase = amt * 0.004, rcPulse = 0, rcRed = 0, rcDining = 0, rcDiningPending = 0, rcGuru = 0;
+        let breakdown = [`基础 0.4% (+${rcBase.toFixed(2)})`];
+
+        if (isMobileUnionPay) {
+          const rawPulse = amt * 0.02;
+          rcPulse = Math.min(rawPulse, Math.max(0, CAPS.pulseRC - cumPulseRC));
+          cumPulseRC += rcPulse;
+          if (rcPulse > 0) breakdown.push(`Pulse 2% (+${rcPulse.toFixed(2)})`);
+          else if (rawPulse > 0) breakdown.push(`Pulse已封顶 (+0.00)`);
+        }
+
+        if (state.settings.redReward) {
+          if (state.settings.redRegDate && txDateStr >= state.settings.redRegDate) {
+            const rawRed = amt * 0.02;
+            rcRed = Math.min(rawRed, Math.max(0, CAPS.redRC - cumRedRC));
+            cumRedRC += rcRed;
+            if (rcRed > 0) breakdown.push(`最红 2% (+${rcRed.toFixed(2)})`);
+            else if (rawRed > 0) breakdown.push(`最红已封顶 (+0.00)`);
+          }
+        }
+
+        // 餐饮返现计算
+        if (state.settings.chinaDining && t.category === 'dining' && !isMicroPay) {
+          if (state.settings.chinaDiningDate && txDateStr >= state.settings.chinaDiningDate) {
+            if (!monthlyAwardedRC[monthKey]) monthlyAwardedRC[monthKey] = 0;
+            const currentAwarded = monthlyAwardedRC[monthKey];
+            const rawDining = amt * dRateDecimal;
+            const potentialGrant = Math.min(rawDining, Math.max(0, diningCap - currentAwarded));
+
+            const isMonthUnlocked = monthlyTotalStats[monthKey]?.isUnlocked;
+            if (isMonthUnlocked) {
+              rcDining = potentialGrant;
+              monthlyAwardedRC[monthKey] += rcDining;
+              if (rcDining > 0) breakdown.push(`餐饮 ${dRatePercent}% [已达标] (+${rcDining.toFixed(2)})`);
+              else if (rawDining > 0) breakdown.push(`餐饮已达月封顶 (+0.00)`);
+            } else {
+              rcDiningPending = potentialGrant;
+              if (rcDiningPending > 0) breakdown.push(`餐饮 ${dRatePercent}% [待当月满¥${diningMinSpend}] (待+${rcDiningPending.toFixed(2)})`);
+            }
+          }
+        }
+
+        // 迎新累计
+        if (state.settings.welcome && !isMicroPay) {
+          const tTime = txDate.getTime();
+          if (tTime >= issueTime && tTime <= expireTime) {
+            welcomeCumSpend += amt;
+            if (!welcomeMilestoneTriggered && welcomeCumSpend >= welcomeThreshold) {
+              welcomeMilestoneTriggered = true;
+              const awardDate = new Date(txDate.getTime() + 1000);
+              const detailText = state.settings.hasReferralCode ?
+                `消费满 ¥${welcomeThreshold} · 基础 800 + 推荐码加赠 1000 RC` :
+                `消费满 ¥${welcomeThreshold} · 获得基础迎新 800 RC`;
+
+              systemAwards.push({
+                id: 'welcome_award_' + t.id,
+                isSystemAward: true,
+                dateTime: awardDate.toISOString(),
+                amount: 0,
+                totalRC: totalWelcomeReward,
+                unlockedRC: totalWelcomeReward,
+                pendingRC: 0,
+                title: '🎁 迎新礼达标奖励',
+                detail: detailText
+              });
+            }
+          }
+        }
+
+        if (t.category === 'travel' && state.settings.guruLevel > 0 && !isMicroPay) {
+          if (state.settings.guruRegDate && txDateStr >= state.settings.guruRegDate) {
+            const rates = { 1: 0.03, 2: 0.04, 3: 0.06 };
+            const cap = CAPS.guruRC[state.settings.guruLevel] || 500.0;
+            const gRate = rates[state.settings.guruLevel] || 0;
+            rcGuru = Math.min(amt * gRate, Math.max(0, cap - cumGuruRC));
+            cumGuruRC += rcGuru;
+            if (rcGuru > 0) breakdown.push(`Guru ${gRate*100}% (+${rcGuru.toFixed(2)})`);
+          }
+        }
+
+        t.unlockedRC = rcBase + rcPulse + rcRed + rcDining + rcGuru;
+        t.pendingRC = rcDiningPending;
+        t.totalRC = t.unlockedRC;
+        t.breakdown = breakdown;
+        t.breakdownDetail = { rcBase, rcPulse, rcRed, rcDining, rcDiningPending, rcGuru };
+      });
+    }
+
+    function calculateLivePreview() {
+      const amt = parseFloat(document.getElementById('txAmount').value);
+      const dtStr = document.getElementById('txDateTime').value || formatDateTimeLocal(new Date());
+      if (isNaN(amt) || amt <= 0) {
+        document.getElementById('previewRC').innerText = `+0.00 RC`;
+        document.getElementById('previewRate').innerText = `返现率 0.0%`;
+        document.getElementById('previewDetail').innerText = '输入金额与时间查看返现测算';
+        return;
+      }
+
+      const tempTx = { dateTime: dtStr, amount: amt, channel: state.currentInput.channel, category: state.currentInput.category };
+      const cloneList = JSON.parse(JSON.stringify(state.transactions));
+      cloneList.push(tempTx);
+
+      const original = state.transactions;
+      state.transactions = cloneList;
+      recalculateAll();
+      const simulated = state.transactions.find(t => t === tempTx);
+      state.transactions = original;
+
+      const totalRC = simulated.unlockedRC;
+      const pendingRC = simulated.pendingRC;
+      const rate = ((totalRC + pendingRC) / amt) * 100;
+
+      if (pendingRC > 0) {
+        document.getElementById('previewRC').innerText = `+${totalRC.toFixed(2)} RC`;
+        document.getElementById('previewRate').innerText = `实得 ${((totalRC/amt)*100).toFixed(1)}% (另+${pendingRC.toFixed(2)}待达标)`;
+      } else {
+        document.getElementById('previewRC').innerText = `+${totalRC.toFixed(2)} RC`;
+        document.getElementById('previewRate').innerText = `返现率 ${rate.toFixed(1)}%`;
+      }
+      document.getElementById('previewDetail').innerText = simulated.breakdown.join(' · ');
+    }
+
+    function addTransaction() {
+      const amtInput = document.getElementById('txAmount');
+      const amt = parseFloat(amtInput.value);
+      const dtInput = document.getElementById('txDateTime');
+      const dtVal = dtInput.value || formatDateTimeLocal(new Date());
+      if (isNaN(amt) || amt <= 0) { alert('请输入有效消费金额'); return; }
+
+      state.transactions.push({ id: Date.now().toString() + Math.random().toString(36).substring(2, 6), dateTime: dtVal, amount: amt, channel: state.currentInput.channel, category: state.currentInput.category });
+      saveState();
+      amtInput.value = '';
+      recalculateAllAndRender();
+      calculateLivePreview();
+    }
+
+    function deleteTx(id) {
+      if (confirm('确定删除此条消费记录吗？')) {
+        state.transactions = state.transactions.filter(t => t.id !== id);
+        saveState();
+        recalculateAllAndRender();
+        calculateLivePreview();
+      }
+    }
+
+    function recalculateAllAndRender() { recalculateAll(); render(); }
+    function getChannelName(ch) {
+      switch (ch) {
+        case 'unionpay_app': return '你好中国/云闪付';
+        case 'apple_pay': return 'Apple Pay';
+        case 'wechat_alipay': return '微信/支付宝';
+        case 'physical_pos': return '实体刷卡';
+        default: return ch;
+      }
+    }
+    function getCategoryName(cat) {
+      switch (cat) {
+        case 'dining': return '内地餐饮';
+        case 'daily': return '日常消费';
+        case 'travel': return '外币/旅行';
+        default: return cat;
+      }
+    }
+
+    function render() {
+      const txUnlockedRC = state.transactions.reduce((acc, t) => acc + (t.unlockedRC || 0), 0);
+      const systemAwardRC = systemAwards.reduce((acc, a) => acc + (a.totalRC || 0), 0);
+      const totalUnlockedRC = txUnlockedRC + systemAwardRC;
+      const totalPendingRC = state.transactions.reduce((acc, t) => acc + (t.pendingRC || 0), 0);
+      const totalSpend = state.transactions.reduce((acc, t) => acc + (t.amount || 0), 0);
+      const avgRate = totalSpend > 0 ? (totalUnlockedRC / totalSpend) * 100 : 0;
+
+      document.getElementById('totalRC').innerHTML = `${totalUnlockedRC.toFixed(2)} <span style="font-size:15px; font-weight:500;">RC</span>`;
+      document.getElementById('totalSpend').innerText = `¥${totalSpend.toLocaleString('zh-CN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+      document.getElementById('avgRate').innerText = `${avgRate.toFixed(1)}%`;
+
+      const pendingStatEl = document.getElementById('pendingStatText');
+      if (totalPendingRC > 0) {
+        pendingStatEl.style.display = 'inline';
+        pendingStatEl.innerText = `⏳ 待达标解锁: +${totalPendingRC.toFixed(2)} RC`;
+      } else {
+        pendingStatEl.style.display = 'none';
+      }
+
+      // Welcome Progress
+      const welBox = document.getElementById('welcomeProgressBox');
+      if (state.settings.welcome) {
+        welBox.style.display = 'block';
+        const totalWelcomeReward = state.settings.hasReferralCode ? 1800 : 800;
+        document.getElementById('welcomeCardTitle').innerText = `🎁 迎新礼 (满 ¥8,000 返 ${totalWelcomeReward} RC)`;
+
+        const issueDateStr = state.settings.cardIssueDate || todayStr;
+        const issueTime = new Date(issueDateStr + 'T00:00:00').getTime();
+        const expireTime = issueTime + (60 * 24 * 3600 * 1000);
+
+        const welTxs = state.transactions.filter(t => {
+          const tTime = new Date(t.dateTime).getTime();
+          return (t.channel !== 'wechat_alipay') && (tTime >= issueTime && tTime <= expireTime);
+        });
+        const welSpend = welTxs.reduce((acc, t) => acc + t.amount, 0);
+        const threshold = state.settings.welcomeSpendThreshold || 8000;
+
+        document.getElementById('welcomeProgressBar').style.width = `${Math.min(100, (welSpend / threshold) * 100)}%`;
+        document.getElementById('welcomeProgressText').innerText = `¥${welSpend.toFixed(0)} / ¥${threshold.toFixed(0)}`;
+        const welHint = document.getElementById('welcomeStatusHint');
+        if (welSpend >= threshold) {
+          document.getElementById('welcomeProgressBar').style.background = '#16a34a';
+          welHint.innerHTML = `<span style="color:#16a34a; font-weight:600;">🎉 迎新已达标！已单独入账一条 +${totalWelcomeReward} RC 迎新大礼包！</span>`;
+        } else {
+          document.getElementById('welcomeProgressBar').style.background = '#7c3aed';
+          welHint.innerHTML = `<span style="color:#7c3aed;">⏳ 迎新期内已刷合资格 ¥${welSpend.toFixed(0)}，还差 ¥${(threshold - welSpend).toFixed(0)} 消费解锁 ${totalWelcomeReward} RC 礼包</span>`;
+        }
+      } else { welBox.style.display = 'none'; }
+
+      // Pulse 2%
+      const earnedPulseRC = state.transactions.reduce((acc, t) => acc + (t.breakdownDetail?.rcPulse || 0), 0);
+      const pulsePct = Math.min(100, (earnedPulseRC / CAPS.pulseRC) * 100);
+      document.getElementById('pulseProgressBar').style.width = `${pulsePct}%`;
+      document.getElementById('pulseProgressText').innerText = `${earnedPulseRC.toFixed(1)} / ${CAPS.pulseRC.toFixed(0)} RC (已达 ${pulsePct.toFixed(0)}%)`;
+
+      // Red 2%
+      const redBox = document.getElementById('redProgressBox');
+      if (state.settings.redReward) {
+        redBox.style.display = 'block';
+        const earnedRedRC = state.transactions.reduce((acc, t) => acc + (t.breakdownDetail?.rcRed || 0), 0);
+        const redPct = Math.min(100, (earnedRedRC / CAPS.redRC) * 100);
+        document.getElementById('redProgressBar').style.width = `${redPct}%`;
+        document.getElementById('redProgressText').innerText = `${earnedRedRC.toFixed(1)} / ${CAPS.redRC.toFixed(0)} RC (已达 ${redPct.toFixed(0)}%)`;
+      } else { redBox.style.display = 'none'; }
+
+      // Dining 3%
+      const diningBox = document.getElementById('diningProgressBox');
+      const dRate = state.settings.diningRate || 3.0;
+      const diningMonthlyCap = state.settings.diningMonthlyCap || 80;
+      const diningMinSpend = state.settings.diningMinSpend || 1200;
+
+      if (state.settings.chinaDining) {
+        diningBox.style.display = 'block';
+        document.getElementById('diningCardTitle').innerText = `🍔 当月内地餐饮 (${dRate}% / 封顶 ${diningMonthlyCap} RC)`;
+        const curMonth = new Date().toISOString().substring(0, 7);
+        const monthTxs = state.transactions.filter(t => t.dateTime.startsWith(curMonth) && t.channel !== 'wechat_alipay');
+        
+        const monthTotalSpend = monthTxs.reduce((acc, t) => acc + t.amount, 0);
+        const earnedDiningRC = monthTxs.reduce((acc, t) => acc + (t.breakdownDetail?.rcDining || 0), 0);
+        const monthDiningSpend = monthTxs.filter(t => t.category === 'dining').reduce((acc, t) => acc + t.amount, 0);
+
+        const diningBar = document.getElementById('diningProgressBar');
+        const hint = document.getElementById('diningStatusHint');
+        
+        if (monthTotalSpend < diningMinSpend) {
+          diningBar.style.width = `${Math.min(100, (monthTotalSpend / diningMinSpend) * 100)}%`;
+          diningBar.style.background = '#d97706';
+          document.getElementById('diningProgressText').innerText = `当月总刷 ¥${monthTotalSpend.toFixed(0)} / 门槛 ¥${diningMinSpend}`;
+          hint.innerHTML = `<span style="color:#d97706; font-weight:600;">🔒 当月有效消费已刷 ¥${monthTotalSpend.toFixed(0)}，全场景还差 ¥${(diningMinSpend - monthTotalSpend).toFixed(0)} 激活餐饮 ${dRate}% 补发！</span>`;
+        } else {
+          diningBar.style.width = `${Math.min(100, (earnedDiningRC / diningMonthlyCap) * 100)}%`;
+          diningBar.style.background = '#16a34a';
+          document.getElementById('diningProgressText').innerText = `${earnedDiningRC.toFixed(1)} / ${diningMonthlyCap} RC (已达标)`;
+          if (earnedDiningRC >= diningMonthlyCap) {
+            hint.innerHTML = `<span style="color:#16a34a; font-weight:600;">✅ 已达标！本月 ${diningMonthlyCap} RC 餐饮奖励已全额封顶！</span>`;
+          } else {
+            const capSpend = (diningMonthlyCap / (dRate / 100));
+            hint.innerHTML = `<span style="color:#16a34a; font-weight:600;">✅ 已达标！已到手餐饮 ${earnedDiningRC.toFixed(1)} RC (餐饮还差 ¥${Math.max(0, capSpend - monthDiningSpend).toFixed(0)} 拿满 80 RC)</span>`;
+          }
+        }
+      } else { diningBox.style.display = 'none'; }
+
+      // Timeline Rendering
+      const allItems = [...state.transactions, ...systemAwards];
+      allItems.sort((a, b) => new Date(a.dateTime).getTime() - new Date(b.dateTime).getTime());
+
+      const container = document.getElementById('txListContainer');
+      if (allItems.length === 0) {
+        container.innerHTML = '<div style="text-align:center; padding: 20px; color: var(--text-muted); font-size:12px;">暂无消费记录</div>';
+        return;
+      }
+      const displayList = allItems.reverse();
+      let html = '';
+      displayList.forEach(t => {
+        const d = new Date(t.dateTime);
+        const pad = n => String(n).padStart(2, '0');
+        const timeFormatted = `${pad(d.getMonth()+1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+
+        if (t.isSystemAward) {
+          html += `
+            <div class="history-item welcome-award">
+              <div class="h-info">
+                <div class="h-title" style="color: #9333ea;">${t.title}</div>
+                <div class="h-meta">
+                  <span class="h-badge" style="background:#f3e8ff; color:#7e22ce;">系统自动发放</span>
+                  <span>${timeFormatted}</span>
+                </div>
+                <div class="h-breakdown-tags" style="color:#a855f7;">${t.detail}</div>
+              </div>
+              <div class="h-right">
+                <div class="h-rc" style="color:#9333ea; font-size:16px;">+${t.totalRC.toFixed(2)} RC</div>
+                <div class="h-amt" style="color:#a855f7; font-weight:600;">迎新大礼包</div>
+              </div>
+            </div>
+          `;
+        } else {
+          const isPending = (t.pendingRC > 0);
+          html += `
+            <div class="history-item">
+              <div class="h-info">
+                <div class="h-title" style="display:flex; align-items:center; gap:6px;">
+                  <span>${getCategoryName(t.category)} · ¥${t.amount.toFixed(2)}</span>
+                  ${isPending ? '<span class="badge-pending">待当月满1200</span>' : ''}
+                </div>
+                <div class="h-meta">
+                  <span class="h-badge">${getChannelName(t.channel)}</span>
+                  <span>${timeFormatted}</span>
+                </div>
+                <div class="h-breakdown-tags">${t.breakdown.join(' · ')}</div>
+              </div>
+              <div style="display:flex; align-items:center; gap:8px;">
+                <div class="h-right">
+                  <div class="h-rc">+${t.unlockedRC.toFixed(2)} RC</div>
+                  <div class="h-amt">${isPending ? '<span style="color:#d97706;">(+'+t.pendingRC.toFixed(2)+'待激活)</span>' : ((t.unlockedRC/t.amount)*100).toFixed(1)+'% 到手'}</div>
+                </div>
+                <div class="h-actions">
+                  <button class="btn-action btn-edit" title="修改" onclick="openEditModal('${t.id}')">✏️</button>
+                  <button class="btn-action btn-del" title="删除" onclick="deleteTx('${t.id}')">✕</button>
+                </div>
+              </div>
+            </div>
+          `;
+        }
+      });
+      container.innerHTML = html;
+    }
+
+    function openSettings() { document.getElementById('settingsModal').classList.add('open'); }
+    function closeSettings() { document.getElementById('settingsModal').classList.remove('open'); }
+    
+    function clearAllData() {
+      if (confirm('确定清空所有消费记录和重置进度吗？')) {
+        state.transactions = []; saveState(); recalculateAllAndRender(); closeSettings();
+      }
+    }
+
+    function exportData() {
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(state, null, 2));
+      const downloadAnchor = document.createElement('a');
+      downloadAnchor.setAttribute("href", dataStr);
+      downloadAnchor.setAttribute("download", `hsbc_pulse_records_${new Date().toISOString().substring(0,10)}.json`);
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+    }
+
+    // 触发文件选择框
+    function triggerFileInput() {
+      document.getElementById('jsonFileInput').click();
+    }
+
+    // 导入 JSON 文件数据
+    function importData(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const imported = JSON.parse(e.target.result);
+          if (imported && (imported.transactions || imported.settings)) {
+            state.transactions = imported.transactions || [];
+            state.settings = { ...state.settings, ...(imported.settings || {}) };
+            
+            saveState();
+            init(); // 重新刷新界面
+            alert('✅ 备份数据导入成功！');
+          } else {
+            alert('❌ 导入失败：JSON 文件格式不匹配。');
+          }
+        } catch (err) {
+          alert('❌ 文件解析失败：请确保上传了正确的 .json 备份文件。');
+        }
+        event.target.value = ''; // 清空选择器以便重复选择
+      };
+      reader.readAsText(file);
+    }
+
+    window.onload = init;
+  </script>
+</body>
+</html>
