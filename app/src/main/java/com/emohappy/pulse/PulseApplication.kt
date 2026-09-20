@@ -14,6 +14,7 @@ class PulseApplication : Application() {
         super.onCreate()
         val database = PulseDatabase.getInstance(this)
         val dataStore = SettingsDataStore(this)
-        repository = PulseRepository(database.transactionDao(), dataStore)
+        val autoBackupManager = com.emohappy.pulse.data.AutoBackupManager(this)
+        repository = PulseRepository(database.transactionDao(), dataStore, autoBackupManager)
     }
 }

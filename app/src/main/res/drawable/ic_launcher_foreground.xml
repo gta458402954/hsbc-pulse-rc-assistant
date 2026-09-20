@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    
+    <!-- Central Card / Emblem Shape -->
+    <path
+        android:fillColor="#27272A"
+        android:pathData="M26,35h56a8,8 0 0,1 8,8v30a8,8 0 0,1 -8,8h-56a8,8 0 0,1 -8,-8v-30a8,8 0 0,1 8,-8z" />
+    <path
+        android:fillColor="#3F3F46"
+        android:pathData="M26,35h56a8,8 0 0,1 8,8v6h-72v-6a8,8 0 0,1 8,-8z" />
+
+    <!-- HSBC-inspired Geometric Triangles (Hourglass / Hexagon) -->
+    <!-- Center Left White Triangle -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M44,46 L54,54 L44,62 Z" />
+    <!-- Center Right White Triangle -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M64,46 L54,54 L64,62 Z" />
+    <!-- Top Red Triangle -->
+    <path
+        android:fillColor="#DC2626"
+        android:pathData="M44,46 L64,46 L54,54 Z" />
+    <!-- Bottom Red Triangle -->
+    <path
+        android:fillColor="#DC2626"
+        android:pathData="M44,62 L64,62 L54,54 Z" />
+
+    <!-- Pulse Heartbeat / Waveform Line (Gold/Yellow) -->
+    <path
+        android:strokeColor="#FBBF24"
+        android:strokeWidth="2.5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M20,68 L36,68 L42,58 L48,76 L54,63 L59,71 L65,68 L88,68" />
+
+    <!-- Sparkle / Diamond Accent -->
+    <path
+        android:fillColor="#FDE047"
+        android:pathData="M76,41 L78,45 L82,47 L78,49 L76,53 L74,49 L70,47 L74,45 Z" />
+</vector>

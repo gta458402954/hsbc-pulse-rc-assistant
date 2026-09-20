@@ -5,6 +5,7 @@ import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -179,6 +180,58 @@ fun MainScreen(
                                 .fillMaxWidth()
                                 .weight(1f)
                         ) {
+                            if (state.availableBackupCount > 0 && state.calculationResult.transactions.isEmpty()) {
+                                item(key = "auto_backup_banner") {
+                                    Card(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 16.dp, vertical = 6.dp),
+                                        colors = CardDefaults.cardColors(containerColor = Color(0xFFFEF2F2)),
+                                        border = BorderStroke(1.dp, Color(0xFFFECACA)),
+                                        shape = RoundedCornerShape(12.dp)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(14.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Text(
+                                                    text = "💡 检测到本地存在自动备份",
+                                                    fontWeight = FontWeight.Bold,
+                                                    fontSize = 13.sp,
+                                                    color = Color(0xFF991B1B)
+                                                )
+                                                Text(
+                                                    text = "包含 ${state.availableBackupCount} 笔消费与配置，点击一键恢复",
+                                                    fontSize = 11.sp,
+                                                    color = Color(0xFFB91C1C)
+                                                )
+                                            }
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Button(
+                                                onClick = {
+                                                    viewModel.restoreFromAutoBackup { res ->
+                                                        res.onSuccess { count ->
+                                                            Toast.makeText(context, "✅ 已成功恢复 $count 笔记录！", Toast.LENGTH_SHORT).show()
+                                                        }.onFailure {
+                                                            Toast.makeText(context, "❌ 恢复失败: ${it.message}", Toast.LENGTH_SHORT).show()
+                                                        }
+                                                    }
+                                                },
+                                                colors = ButtonDefaults.buttonColors(containerColor = HsbcRed),
+                                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                                shape = RoundedCornerShape(8.dp)
+                                            ) {
+                                                Text("立即恢复", fontSize = 12.sp, color = Color.White)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
                             item(key = "progress_section") {
                                 Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
                                     ProgressSection(

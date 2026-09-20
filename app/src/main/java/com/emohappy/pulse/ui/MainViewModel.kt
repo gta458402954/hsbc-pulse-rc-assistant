@@ -29,7 +29,8 @@ data class MainUiState(
     val editingTransaction: TransactionEntity? = null,
     val isSettingsOpen: Boolean = false,
     val infoMessage: String? = null,
-    val selectedDashboardMonth: YearMonth = YearMonth.now()
+    val selectedDashboardMonth: YearMonth = YearMonth.now(),
+    val availableBackupCount: Int = 0
 )
 
 class MainViewModel(
@@ -59,7 +60,40 @@ class MainViewModel(
                     )
                 }
                 updateLivePreview()
+                checkAutoBackup()
             }
+        }
+    }
+
+    fun checkAutoBackup() {
+        viewModelScope.launch {
+            if (currentRawTransactions.isEmpty()) {
+                val count = repository.getAutoBackupCount()
+                if (count > 0) {
+                    restoreFromAutoBackup { res ->
+                        res.onSuccess {
+                            _uiState.update { it.copy(infoMessage = "✅ 已自动从本地备份恢复 $count 笔消费记录！") }
+                        }
+                    }
+                } else {
+                    _uiState.update { it.copy(availableBackupCount = 0) }
+                }
+            } else {
+                _uiState.update { it.copy(availableBackupCount = 0) }
+            }
+        }
+    }
+
+    fun restoreFromAutoBackup(onComplete: (Result<Int>) -> Unit) {
+        viewModelScope.launch {
+            val content = repository.getAvailableAutoBackup()
+            if (content.isNullOrBlank()) {
+                onComplete(Result.failure(IllegalStateException("未找到可恢复的备份文件")))
+                return@launch
+            }
+            val result = repository.importJson(content)
+            checkAutoBackup()
+            onComplete(result)
         }
     }
 

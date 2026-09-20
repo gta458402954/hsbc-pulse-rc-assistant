@@ -45,6 +45,7 @@ proguard/
 
 # Keystore files
 *.jks
+!app/release.jks
 *.keystore
 
 # Kotlin

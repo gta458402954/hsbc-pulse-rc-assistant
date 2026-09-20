@@ -11,7 +11,8 @@ import kotlinx.serialization.json.Json
 
 class PulseRepository(
     private val transactionDao: TransactionDao,
-    private val settingsDataStore: SettingsDataStore
+    private val settingsDataStore: SettingsDataStore,
+    private val autoBackupManager: AutoBackupManager? = null
 ) {
     val allTransactions: Flow<List<TransactionEntity>> = transactionDao.getAllTransactions()
     val settings: Flow<UserSettings> = settingsDataStore.settingsFlow
@@ -22,24 +23,39 @@ class PulseRepository(
         prettyPrint = true
     }
 
+    private suspend fun triggerAutoBackup() {
+        runCatching {
+            val jsonContent = exportJson()
+            autoBackupManager?.saveAutoBackup(jsonContent)
+        }
+    }
+
+    suspend fun getAvailableAutoBackup(): String? = autoBackupManager?.getAvailableBackup()
+    suspend fun getAutoBackupCount(): Int = autoBackupManager?.getBackupTransactionCount() ?: 0
+
     suspend fun addTransaction(tx: TransactionEntity) {
         transactionDao.insert(tx)
+        triggerAutoBackup()
     }
 
     suspend fun updateTransaction(tx: TransactionEntity) {
         transactionDao.update(tx)
+        triggerAutoBackup()
     }
 
     suspend fun deleteTransaction(id: String) {
         transactionDao.deleteById(id)
+        triggerAutoBackup()
     }
 
     suspend fun clearAll() {
         transactionDao.deleteAll()
+        triggerAutoBackup()
     }
 
     suspend fun saveSettings(userSettings: UserSettings) {
         settingsDataStore.saveSettings(userSettings)
+        triggerAutoBackup()
     }
 
     suspend fun exportJson(): String {
@@ -60,6 +76,7 @@ class PulseRepository(
                 transactionDao.insertAll(entities)
             }
             settingsDataStore.saveSettings(backupDto.settings)
+            triggerAutoBackup()
             backupDto.transactions.size
         }
     }
