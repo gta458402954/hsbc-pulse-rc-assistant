@@ -378,6 +378,8 @@ object PulseCalculatorEngine {
                 val qEarned = qTxs.sumOf { it.breakdownDetail.rcDining }
                 val qCap = settings.diningMonthlyCap * 3
                 val prog = if (qCap > 0) (qEarned / qCap).toFloat().coerceIn(0f, 1f) else 0f
+                val dRateDec = (settings.diningRate / 100.0).coerceAtLeast(0.001)
+                val remainingSpendToCap = if (dRateDec > 0) max(0.0, (qCap - qEarned) / dRateDec) else 0.0
 
                 RhCnQuarterStatus(
                     quarterIndex = q,
@@ -395,7 +397,7 @@ object PulseCalculatorEngine {
                     isUnlocked = qEarned > 0,
                     progress = prog,
                     remainingSpendToUnlock = 0.0,
-                    remainingSpendToCap = max(0.0, qCap - qEarned)
+                    remainingSpendToCap = remainingSpendToCap
                 )
             }
         }

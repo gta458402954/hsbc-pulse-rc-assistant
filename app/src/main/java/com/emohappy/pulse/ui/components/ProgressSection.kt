@@ -106,7 +106,7 @@ fun ProgressSection(
 
             // 2. 最红中国内地签账奖赏 (RH CN Spend - 1~6月季度全类别 / 7~12月月度餐饮加码)
             if (settings.rhCnSpend || settings.chinaDining) {
-                val isH2 = (summary.monthStr.length >= 7 && (summary.monthStr.substring(5, 7).toIntOrNull() ?: 1) > 6)
+                val isH2 = summary.rhCnStatus.halfYearIndex == 2
                 if (!isH2) {
                     val qStatus = summary.rhCnStatus
                     val isUnlocked = qStatus.isUnlocked
@@ -157,19 +157,20 @@ fun ProgressSection(
                     val valueText = if (!isUnlocked) {
                         "当月内地总签账 ¥${summary.monthTotalSpend.toInt()} / 门槛 ¥$minSpend"
                     } else {
-                        "${String.format("%.1f", summary.monthDiningRC)} / $cap RC (已达标)"
+                        "${String.format("%.1f", summary.monthDiningRC)} / $cap RC (当月达标)"
                     }
 
+                    val qStatus = summary.rhCnStatus
                     val hint = if (!isUnlocked) {
                         val needed = max(0.0, summary.diningMinSpend - summary.monthTotalSpend)
                         "🔒 当月内地有效消费已刷 ¥${summary.monthTotalSpend.toInt()}，还差 ¥${needed.toInt()} 激活餐饮额外 ${dRate}% 回赠！"
                     } else {
                         if (summary.monthDiningRC >= summary.diningMonthlyCap) {
-                            "✅ 已达标！本月 $cap RC 餐饮加赠已全额封顶！"
+                            "✅ 已达标！本月 $cap RC 餐饮加赠已全额封顶！(本季已累计 ${String.format("%.1f", qStatus.earnedRC)} / ${qStatus.capRC.toInt()} RC)"
                         } else {
                             val capSpend = summary.diningMonthlyCap / (settings.diningRate / 100.0)
                             val neededSpend = max(0.0, capSpend - summary.monthDiningSpend)
-                            "✅ 已达标！已到手餐饮加赠 ${String.format("%.1f", summary.monthDiningRC)} RC (还差餐饮 ¥${neededSpend.toInt()} 拿满 $cap RC)"
+                            "✅ 已达标！本月已获餐饮 +${String.format("%.1f", summary.monthDiningRC)} RC (还可刷餐饮 ¥${neededSpend.toInt()} 拿满当月 $cap RC · 本季已累计 ${String.format("%.1f", qStatus.earnedRC)} / ${qStatus.capRC.toInt()} RC)"
                         }
                     }
 
