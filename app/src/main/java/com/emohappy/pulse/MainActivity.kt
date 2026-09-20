@@ -9,6 +9,8 @@ import com.emohappy.pulse.ui.MainScreen
 import com.emohappy.pulse.ui.MainViewModel
 import com.emohappy.pulse.ui.theme.PulseTheme
 
+import android.content.Intent
+
 class MainActivity : ComponentActivity() {
 
     private val viewModel: MainViewModel by viewModels {
@@ -19,10 +21,23 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        handleIntent(intent)
         setContent {
             PulseTheme {
                 MainScreen(viewModel = viewModel)
             }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleIntent(intent)
+    }
+
+    private fun handleIntent(intent: Intent?) {
+        if (intent?.getBooleanExtra("restore_backup", false) == true) {
+            viewModel.restoreFromAutoBackup { }
         }
     }
 }

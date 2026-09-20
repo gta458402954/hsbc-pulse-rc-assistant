@@ -9,6 +9,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.outlined.DateRange
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -325,40 +326,198 @@ fun SettingsDialog(
                         }
                     }
 
-                    // 5. Travel Guru (支持多周期与降级重刷)
+                    // 5. Travel Guru (支持多轮次与降级重刷)
                     SettingGroup(
-                        title = "Travel Guru 旅人会籍与周期管理",
-                        desc = "支持多周期与降级重刷（刷满3,900 RC后可重置为Lv.1开启新一轮，各周期额度与升级任务独立计算）"
+                        title = "Travel Guru 旅人会籍与轮次管理",
+                        desc = "支持多轮次与降级重刷（刷满3,900 RC后可重置为Lv.1开启新一轮，各轮次额度与升级任务独立计算）"
                     ) {
-                        val distinctCycles = guruStagesState.map { it.cycleName }.distinct()
+                        val distinctCycles = remember(guruStagesState) {
+                            val cycles = guruStagesState.map { it.cycleName }.distinct()
+                            if (cycles.isEmpty()) listOf("第 1 轮") else cycles
+                        }
+                        var selectedCycle by remember(distinctCycles) {
+                            mutableStateOf(
+                                guruStagesState.firstOrNull { it.enabled && (it.endDate.isEmpty() || it.endDate >= LocalDate.now().toString()) }?.cycleName
+                                    ?: distinctCycles.lastOrNull()
+                                    ?: "第 1 轮"
+                            )
+                        }
+                        val currentCycle = if (selectedCycle in distinctCycles) selectedCycle else (distinctCycles.lastOrNull() ?: "第 1 轮")
+                        var cycleDropdownExpanded by remember { mutableStateOf(false) }
+
+                        val currentCycleStages = guruStagesState.filter { it.cycleName == currentCycle }
+
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "已配置 ${distinctCycles.size} 个周期 · 共 ${guruStagesState.size} 个阶段",
+                                text = "已配置 ${distinctCycles.size} 个轮次 · 共 ${guruStagesState.size} 个阶段",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = TextMuted
                             )
                             Text(
-                                text = "↺ 恢复两轮默认配置",
+                                text = "↺ 恢复两轮结单核实配置",
                                 fontSize = 11.sp,
                                 color = HsbcRed,
                                 fontWeight = FontWeight.SemiBold,
                                 modifier = Modifier
                                     .clickable {
                                         guruStagesState = UserSettings.DEFAULT_GURU_STAGES
+                                        selectedCycle = "第 2 轮"
                                     }
                                     .padding(4.dp)
                             )
                         }
 
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        // 轮次下拉框与开启新一轮按钮
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // 下拉选择框
+                            Box(modifier = Modifier.weight(1f)) {
+                                Card(
+                                    colors = CardDefaults.cardColors(containerColor = BgLight),
+                                    shape = RoundedCornerShape(8.dp),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, BorderLight),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { cycleDropdownExpanded = true }
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 10.dp, vertical = 8.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column {
+                                            Text("会籍轮次 (点击切换)", fontSize = 9.sp, color = TextMuted)
+                                            Text(
+                                                text = currentCycle,
+                                                fontSize = 13.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = TextPrimary
+                                            )
+                                        }
+                                        Icon(
+                                            imageVector = Icons.Default.ArrowDropDown,
+                                            contentDescription = "选择轮次",
+                                            tint = TextMuted
+                                        )
+                                    }
+                                }
+
+                                DropdownMenu(
+                                    expanded = cycleDropdownExpanded,
+                                    onDismissRequest = { cycleDropdownExpanded = false },
+                                    modifier = Modifier.background(Color.White)
+                                ) {
+                                    distinctCycles.forEach { cycle ->
+                                        val count = guruStagesState.count { it.cycleName == cycle }
+                                        val isSelected = cycle == currentCycle
+                                        DropdownMenuItem(
+                                            text = {
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Text(
+                                                        text = cycle,
+                                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                                        color = if (isSelected) HsbcRed else TextPrimary,
+                                                        fontSize = 13.sp
+                                                    )
+                                                    Spacer(modifier = Modifier.width(16.dp))
+                                                    Text(
+                                                        text = "${count}个等级",
+                                                        fontSize = 11.sp,
+                                                        color = TextMuted
+                                                    )
+                                                }
+                                            },
+                                            onClick = {
+                                                selectedCycle = cycle
+                                                cycleDropdownExpanded = false
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+
+                            // 开启新一轮按钮
+                            Button(
+                                onClick = {
+                                    val nextCycleNum = (distinctCycles.mapNotNull {
+                                        Regex("""第\s*(\d+)\s*轮""").find(it)?.groupValues?.get(1)?.toIntOrNull()
+                                    }.maxOrNull() ?: distinctCycles.size) + 1
+                                    val newCycleName = "第 $nextCycleNum 轮"
+                                    val newStage = GuruStagePeriod(
+                                        id = "stage_c${nextCycleNum}_lv1_${System.currentTimeMillis() % 10000}",
+                                        cycleName = newCycleName,
+                                        level = 1,
+                                        enabled = true,
+                                        startDate = LocalDate.now().toString(),
+                                        endDate = "",
+                                        ratePercent = 3.0,
+                                        capRC = 500.0,
+                                        isDowngradeReset = true
+                                    )
+                                    guruStagesState = guruStagesState + newStage
+                                    selectedCycle = newCycleName
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD97706)),
+                                shape = RoundedCornerShape(8.dp),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp)
+                            ) {
+                                Text("➕ 开启新一轮", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        // 当前轮次信息栏与删除整轮按钮
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "【$currentCycle】包含 ${currentCycleStages.size} 个等级阶段",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = TextPrimary
+                            )
+                            if (distinctCycles.size > 1) {
+                                Text(
+                                    text = "🗑️ 删除此轮",
+                                    fontSize = 11.sp,
+                                    color = HsbcRed,
+                                    fontWeight = FontWeight.SemiBold,
+                                    modifier = Modifier
+                                        .clickable {
+                                            val remainingCycles = distinctCycles.filter { it != currentCycle }
+                                            guruStagesState = guruStagesState.filter { it.cycleName != currentCycle }
+                                            selectedCycle = remainingCycles.lastOrNull() ?: "第 1 轮"
+                                        }
+                                        .padding(4.dp)
+                                )
+                            }
+                        }
+
                         Spacer(modifier = Modifier.height(6.dp))
 
-                        guruStagesState.forEachIndexed { index, stage ->
-                            var isExpanded by remember { mutableStateOf(index == guruStagesState.lastIndex) }
+                        // 展示当前选定轮次的阶段列表
+                        currentCycleStages.forEach { stage ->
+                            val stageId = stage.id
+                            var isExpanded by remember { mutableStateOf(true) }
                             val lvlName = when (stage.level) {
                                 1 -> "Lv.1 GO 旅人"
                                 2 -> "Lv.2 GING 旅人"
@@ -392,7 +551,7 @@ fun SettingsDialog(
                                         ) {
                                             Row(verticalAlignment = Alignment.CenterVertically) {
                                                 Text(
-                                                    text = "${stage.cycleName} · $lvlName",
+                                                    text = lvlName,
                                                     fontSize = 12.sp,
                                                     fontWeight = FontWeight.Bold,
                                                     color = if (stage.enabled) TextPrimary else TextMuted
@@ -429,8 +588,8 @@ fun SettingsDialog(
                                         Switch(
                                             checked = stage.enabled,
                                             onCheckedChange = { chk ->
-                                                guruStagesState = guruStagesState.mapIndexed { i, s ->
-                                                    if (i == index) s.copy(enabled = chk) else s
+                                                guruStagesState = guruStagesState.map { s ->
+                                                    if (s.id == stageId) s.copy(enabled = chk) else s
                                                 }
                                             }
                                         )
@@ -440,20 +599,6 @@ fun SettingsDialog(
                                         Spacer(modifier = Modifier.height(8.dp))
                                         HorizontalDivider(color = BorderLight, thickness = 0.5.dp)
                                         Spacer(modifier = Modifier.height(8.dp))
-
-                                        OutlinedTextField(
-                                            value = stage.cycleName,
-                                            onValueChange = { newName ->
-                                                guruStagesState = guruStagesState.mapIndexed { i, s ->
-                                                    if (i == index) s.copy(cycleName = newName) else s
-                                                }
-                                            },
-                                            label = { Text("周期名称 (如: 第 1 轮 / 第 2 轮)", fontSize = 11.sp) },
-                                            singleLine = true,
-                                            modifier = Modifier.fillMaxWidth()
-                                        )
-
-                                        Spacer(modifier = Modifier.height(6.dp))
 
                                         Row(
                                             modifier = Modifier.fillMaxWidth(),
@@ -471,8 +616,8 @@ fun SettingsDialog(
                                                     FilterChip(
                                                         selected = stage.level == lvl,
                                                         onClick = {
-                                                            guruStagesState = guruStagesState.mapIndexed { i, s ->
-                                                                if (i == index) s.copy(
+                                                            guruStagesState = guruStagesState.map { s ->
+                                                                if (s.id == stageId) s.copy(
                                                                     level = lvl,
                                                                     ratePercent = defaults.first,
                                                                     capRC = defaults.second
@@ -496,8 +641,8 @@ fun SettingsDialog(
                                                 dateStr = if (stage.startDate.isNotEmpty()) stage.startDate else "点击选择",
                                                 onClick = {
                                                     pickDate(if (stage.startDate.isNotEmpty()) stage.startDate else "2026-01-01") { chosen ->
-                                                        guruStagesState = guruStagesState.mapIndexed { i, s ->
-                                                            if (i == index) s.copy(startDate = chosen) else s
+                                                        guruStagesState = guruStagesState.map { s ->
+                                                            if (s.id == stageId) s.copy(startDate = chosen) else s
                                                         }
                                                     }
                                                 },
@@ -509,8 +654,8 @@ fun SettingsDialog(
                                                 dateStr = if (stage.endDate.isNotEmpty()) stage.endDate else "无期限",
                                                 onClick = {
                                                     pickDate(if (stage.endDate.isNotEmpty()) stage.endDate else "2026-12-31") { chosen ->
-                                                        guruStagesState = guruStagesState.mapIndexed { i, s ->
-                                                            if (i == index) s.copy(endDate = chosen) else s
+                                                        guruStagesState = guruStagesState.map { s ->
+                                                            if (s.id == stageId) s.copy(endDate = chosen) else s
                                                         }
                                                     }
                                                 },
@@ -530,8 +675,8 @@ fun SettingsDialog(
                                                     fontWeight = FontWeight.SemiBold,
                                                     modifier = Modifier
                                                         .clickable {
-                                                            guruStagesState = guruStagesState.mapIndexed { i, s ->
-                                                                if (i == index) s.copy(endDate = "") else s
+                                                            guruStagesState = guruStagesState.map { s ->
+                                                                if (s.id == stageId) s.copy(endDate = "") else s
                                                             }
                                                         }
                                                         .padding(top = 2.dp)
@@ -549,8 +694,8 @@ fun SettingsDialog(
                                                 value = if (stage.ratePercent % 1.0 == 0.0) stage.ratePercent.toInt().toString() else stage.ratePercent.toString(),
                                                 onValueChange = { input ->
                                                     val num = input.toDoubleOrNull() ?: stage.ratePercent
-                                                    guruStagesState = guruStagesState.mapIndexed { i, s ->
-                                                        if (i == index) s.copy(ratePercent = num) else s
+                                                    guruStagesState = guruStagesState.map { s ->
+                                                        if (s.id == stageId) s.copy(ratePercent = num) else s
                                                     }
                                                 },
                                                 label = { Text("返现比例(%)", fontSize = 11.sp) },
@@ -563,8 +708,8 @@ fun SettingsDialog(
                                                 value = stage.capRC.toInt().toString(),
                                                 onValueChange = { input ->
                                                     val num = input.toDoubleOrNull() ?: stage.capRC
-                                                    guruStagesState = guruStagesState.mapIndexed { i, s ->
-                                                        if (i == index) s.copy(capRC = num) else s
+                                                    guruStagesState = guruStagesState.map { s ->
+                                                        if (s.id == stageId) s.copy(capRC = num) else s
                                                     }
                                                 },
                                                 label = { Text("本阶段封顶(RC)", fontSize = 11.sp) },
@@ -584,16 +729,16 @@ fun SettingsDialog(
                                             Row(
                                                 verticalAlignment = Alignment.CenterVertically,
                                                 modifier = Modifier.clickable {
-                                                    guruStagesState = guruStagesState.mapIndexed { i, s ->
-                                                        if (i == index) s.copy(isDowngradeReset = !s.isDowngradeReset) else s
+                                                    guruStagesState = guruStagesState.map { s ->
+                                                        if (s.id == stageId) s.copy(isDowngradeReset = !s.isDowngradeReset) else s
                                                     }
                                                 }
                                             ) {
                                                 Checkbox(
                                                     checked = stage.isDowngradeReset,
                                                     onCheckedChange = { checked ->
-                                                        guruStagesState = guruStagesState.mapIndexed { i, s ->
-                                                            if (i == index) s.copy(isDowngradeReset = checked) else s
+                                                        guruStagesState = guruStagesState.map { s ->
+                                                            if (s.id == stageId) s.copy(isDowngradeReset = checked) else s
                                                         }
                                                     }
                                                 )
@@ -604,15 +749,15 @@ fun SettingsDialog(
                                                 )
                                             }
 
-                                            if (guruStagesState.size > 1) {
+                                            if (currentCycleStages.size > 1) {
                                                 Text(
-                                                    text = "删除此阶段",
+                                                    text = "删除此等级",
                                                     fontSize = 11.sp,
                                                     color = HsbcRed,
                                                     fontWeight = FontWeight.Bold,
                                                     modifier = Modifier
                                                         .clickable {
-                                                            guruStagesState = guruStagesState.filterIndexed { i, _ -> i != index }
+                                                            guruStagesState = guruStagesState.filter { it.id != stageId }
                                                         }
                                                         .padding(horizontal = 4.dp, vertical = 2.dp)
                                                 )
@@ -623,65 +768,33 @@ fun SettingsDialog(
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(10.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
 
-                        Row(
+                        // 为当前轮次追加更高等级阶段按钮
+                        OutlinedButton(
+                            onClick = {
+                                val stagesInCycle = guruStagesState.filter { it.cycleName == currentCycle }
+                                val maxLvlInCycle = stagesInCycle.maxOfOrNull { it.level } ?: 1
+                                val nextLevel = (maxLvlInCycle + 1).coerceAtMost(3)
+                                val defaultRates = mapOf(1 to 3.0, 2 to 4.0, 3 to 6.0)
+                                val defaultCaps = mapOf(1 to 500.0, 2 to 1200.0, 3 to 2200.0)
+                                val newStage = GuruStagePeriod(
+                                    id = "stage_${currentCycle}_lv${nextLevel}_${System.currentTimeMillis() % 10000}",
+                                    cycleName = currentCycle,
+                                    level = nextLevel,
+                                    enabled = true,
+                                    startDate = LocalDate.now().toString(),
+                                    endDate = "",
+                                    ratePercent = defaultRates[nextLevel] ?: 4.0,
+                                    capRC = defaultCaps[nextLevel] ?: 1200.0,
+                                    isDowngradeReset = false
+                                )
+                                guruStagesState = guruStagesState + newStage
+                            },
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            shape = RoundedCornerShape(8.dp)
                         ) {
-                            OutlinedButton(
-                                onClick = {
-                                    val lastStage = guruStagesState.lastOrNull()
-                                    val nextLevel = when (lastStage?.level) {
-                                        1 -> 2
-                                        2 -> 3
-                                        else -> 3
-                                    }
-                                    val defaultRates = mapOf(1 to 3.0, 2 to 4.0, 3 to 6.0)
-                                    val defaultCaps = mapOf(1 to 500.0, 2 to 1200.0, 3 to 2200.0)
-                                    val curCycleName = lastStage?.cycleName ?: "第 1 轮"
-                                    val newStage = GuruStagePeriod(
-                                        id = "stage_${System.currentTimeMillis()}",
-                                        cycleName = curCycleName,
-                                        level = nextLevel,
-                                        enabled = true,
-                                        startDate = LocalDate.now().toString(),
-                                        endDate = "",
-                                        ratePercent = defaultRates[nextLevel] ?: 4.0,
-                                        capRC = defaultCaps[nextLevel] ?: 1200.0,
-                                        isDowngradeReset = false
-                                    )
-                                    guruStagesState = guruStagesState + newStage
-                                },
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(8.dp)
-                            ) {
-                                Text("➕ 追加升级阶段", fontSize = 11.sp)
-                            }
-
-                            Button(
-                                onClick = {
-                                    val cycleCount = guruStagesState.map { it.cycleName }.distinct().size
-                                    val nextCycleName = "第 ${cycleCount + 1} 轮 (${LocalDate.now().year}~至今)"
-                                    val newStage = GuruStagePeriod(
-                                        id = "stage_c${cycleCount + 1}_lv1",
-                                        cycleName = nextCycleName,
-                                        level = 1,
-                                        enabled = true,
-                                        startDate = LocalDate.now().toString(),
-                                        endDate = "",
-                                        ratePercent = 3.0,
-                                        capRC = 500.0,
-                                        isDowngradeReset = true
-                                    )
-                                    guruStagesState = guruStagesState + newStage
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD97706)),
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(8.dp)
-                            ) {
-                                Text("🔄 开启新一轮降级", fontSize = 11.sp, color = Color.White)
-                            }
+                            Text("➕ 追加升级阶段 (Lv.2 / Lv.3)", fontSize = 11.sp)
                         }
                     }
 

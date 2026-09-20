@@ -84,9 +84,10 @@ data class UserSettings(
 ) {
     companion object {
         val DEFAULT_GURU_STAGES: List<GuruStagePeriod> = listOf(
+            // 第 1 轮（2024年9月 ~ 2026年7月，已顺利完成全拿满 3,900 RC）
             GuruStagePeriod(
                 id = "stage_c1_lv1",
-                cycleName = "第 1 轮 (2024~2025)",
+                cycleName = "第 1 轮",
                 level = 1,
                 enabled = true,
                 startDate = "2024-09-01",
@@ -97,7 +98,7 @@ data class UserSettings(
             ),
             GuruStagePeriod(
                 id = "stage_c1_lv2",
-                cycleName = "第 1 轮 (2024~2025)",
+                cycleName = "第 1 轮",
                 level = 2,
                 enabled = true,
                 startDate = "2025-02-01",
@@ -108,25 +109,37 @@ data class UserSettings(
             ),
             GuruStagePeriod(
                 id = "stage_c1_lv3",
-                cycleName = "第 1 轮 (2024~2025)",
+                cycleName = "第 1 轮",
                 level = 3,
                 enabled = true,
                 startDate = "2025-09-01",
-                endDate = "2026-01-31",
+                endDate = "2026-07-31",
                 ratePercent = 6.0,
                 capRC = 2200.0,
                 isDowngradeReset = false
             ),
+            // 第 2 轮（2026年8月 ~ 至今，降级重刷中）
             GuruStagePeriod(
                 id = "stage_c2_lv1",
-                cycleName = "第 2 轮 (2026~至今)",
+                cycleName = "第 2 轮",
                 level = 1,
                 enabled = true,
-                startDate = "2026-02-01",
-                endDate = "",
+                startDate = "2026-08-01",
+                endDate = "2026-09-30",
                 ratePercent = 3.0,
                 capRC = 500.0,
                 isDowngradeReset = true
+            ),
+            GuruStagePeriod(
+                id = "stage_c2_lv2",
+                cycleName = "第 2 轮",
+                level = 2,
+                enabled = true,
+                startDate = "2026-10-01",
+                endDate = "2027-07-31",
+                ratePercent = 4.0,
+                capRC = 1200.0,
+                isDowngradeReset = false
             )
         )
     }
@@ -146,7 +159,7 @@ data class UserSettings(
                 (stage.endDate.isEmpty() || txDateStr <= stage.endDate)
             }
             if (matching.isNotEmpty()) {
-                return matching.lastOrNull()
+                return matching.maxByOrNull { it.startDate } ?: matching.last()
             }
         }
         val legacy = getActiveGuruConfig(txDateStr) ?: return null

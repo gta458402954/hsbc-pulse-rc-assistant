@@ -378,4 +378,75 @@ class PulseCalculatorEngineTest {
         assertEquals(1600.0, result.summary.pulseH1UsedRC, 0.001)
         assertEquals(1000.0, result.summary.pulseH2UsedRC, 0.001)
     }
+
+    @Test
+    fun testMultiCycleGuruStagesMatchingAndCap() {
+        val settings = UserSettings(
+            redReward = false,
+            rhCnSpend = false,
+            chinaDining = false,
+            welcome = false,
+            guruStages = UserSettings.DEFAULT_GURU_STAGES
+        )
+
+        // 1. 第 1 轮 Lv.1: 2024-10-15 订机票 ¥10,000 (3% = 300 RC, cap 500)
+        val txR1Lv1 = TransactionEntity(
+            id = "tx_r1_lv1",
+            dateTime = "2024-10-15T10:00",
+            amount = 10000.0,
+            channel = PaymentChannel.UNIONPAY_APP.code,
+            category = ExpenseCategory.TRAVEL.code
+        )
+
+        // 2. 第 1 轮 Lv.2: 2025-03-15 酒店 ¥20,000 (4% = 800 RC, cap 1200)
+        val txR1Lv2 = TransactionEntity(
+            id = "tx_r1_lv2",
+            dateTime = "2025-03-15T10:00",
+            amount = 20000.0,
+            channel = PaymentChannel.UNIONPAY_APP.code,
+            category = ExpenseCategory.TRAVEL.code
+        )
+
+        // 3. 第 1 轮 Lv.3: 2025-10-15 机票 ¥30,000 (6% = 1800 RC, cap 2200)
+        val txR1Lv3 = TransactionEntity(
+            id = "tx_r1_lv3",
+            dateTime = "2025-10-15T10:00",
+            amount = 30000.0,
+            channel = PaymentChannel.UNIONPAY_APP.code,
+            category = ExpenseCategory.TRAVEL.code
+        )
+
+        // 4. 第 2 轮 Lv.1 (降级重刷): 2026-08-10 机票 ¥20,000 (3% = 600 -> 封顶 500 RC)
+        val txR2Lv1 = TransactionEntity(
+            id = "tx_r2_lv1",
+            dateTime = "2026-08-10T10:00",
+            amount = 20000.0,
+            channel = PaymentChannel.UNIONPAY_APP.code,
+            category = ExpenseCategory.TRAVEL.code
+        )
+
+        val result = PulseCalculatorEngine.recalculate(
+            listOf(txR1Lv1, txR1Lv2, txR1Lv3, txR2Lv1),
+            settings
+        )
+
+        val pR1Lv1 = result.transactions.first { it.entity.id == "tx_r1_lv1" }
+        assertEquals(300.0, pR1Lv1.breakdownDetail.rcGuru, 0.001)
+
+        val pR1Lv2 = result.transactions.first { it.entity.id == "tx_r1_lv2" }
+        assertEquals(800.0, pR1Lv2.breakdownDetail.rcGuru, 0.001)
+
+        val pR1Lv3 = result.transactions.first { it.entity.id == "tx_r1_lv3" }
+        assertEquals(1800.0, pR1Lv3.breakdownDetail.rcGuru, 0.001)
+
+        val pR2Lv1 = result.transactions.first { it.entity.id == "tx_r2_lv1" }
+        assertEquals(500.0, pR2Lv1.breakdownDetail.rcGuru, 0.001) // 满额封顶 500 RC
+
+        // 验证多周期总览
+        val guruState = result.summary.guruState
+        assertEquals(2, guruState.allCycles.size)
+        assertTrue(guruState.allCycles.contains("第 1 轮"))
+        assertTrue(guruState.allCycles.contains("第 2 轮"))
+        assertEquals(3400.0, guruState.totalHistoricalGuruRC, 0.001) // 300 + 800 + 1800 + 500 = 3400
+    }
 }
