@@ -44,7 +44,7 @@ object PulseCalculatorEngine {
             val txDateStr = if (t.dateTime.length >= 10) t.dateTime.substring(0, 10) else ""
             val monthKey = if (t.dateTime.length >= 7) t.dateTime.substring(0, 7) else ""
             val isMicroPay = (t.channel == PaymentChannel.WECHAT_ALIPAY.code)
-            val isCnSpend = (t.category != ExpenseCategory.TRAVEL.code)
+            val isCnSpend = (t.category != ExpenseCategory.TRAVEL.code && t.category != "travel_booking")
 
             if (!isMicroPay && monthKey.isNotEmpty()) {
                 monthlyTotalStats[monthKey] = (monthlyTotalStats[monthKey] ?: 0.0) + amt
@@ -106,7 +106,7 @@ object PulseCalculatorEngine {
 
             val isMicroPay = (t.channel == PaymentChannel.WECHAT_ALIPAY.code)
             val isMobileUnionPay = (t.channel == PaymentChannel.UNIONPAY_APP.code || t.channel == PaymentChannel.APPLE_PAY.code)
-            val isCnSpend = (t.category != ExpenseCategory.TRAVEL.code)
+            val isCnSpend = (t.category != ExpenseCategory.TRAVEL.code && t.category != "travel_booking")
 
             val rcBase = amt * 0.004
             var rcPulse = 0.0
@@ -487,23 +487,38 @@ object PulseCalculatorEngine {
         val currentCycleStages = stages.filter { it.cycleName == currentCycleName }
         val cycleStartDate = currentCycleStages.minOfOrNull { it.startDate } ?: ""
 
-        val travelTxs = processedTxs.filter {
-            it.entity.category == ExpenseCategory.TRAVEL.code &&
+        // 是否已在规则中预定了次月升级阶段（例如已配置 2026-10-01 起生效的 Lv.2，说明官方已达标锁定升级）
+        val scheduledNextStage = currentCycleStages.firstOrNull {
+            it.enabled && it.level > currentGuruLevel && it.startDate.isNotEmpty() && it.startDate > (activeTier?.startDate ?: "")
+        }
+        val isScheduledUpgrade = scheduledNextStage != null
+
+        // 任务一：合资格外币签账（汇丰规定：所有外币签账均计入，不含微信/支付宝等电子钱包，包含内地日常、餐饮、境外机酒等）
+        val eligibleForeignTxs = processedTxs.filter {
             it.entity.channel != PaymentChannel.WECHAT_ALIPAY.code &&
             (cycleStartDate.isEmpty() || it.entity.dateTime >= cycleStartDate)
         }
-        val task1Spend = travelTxs.sumOf { it.entity.amount }
-        val task1Done = task1Spend >= task1TargetSpend
-        val task1Prog = (task1Spend / task1TargetSpend).toFloat().coerceIn(0f, 1f)
+        val actualForeignSpend = eligibleForeignTxs.sumOf { it.entity.amount }
+        val task1Spend = if (isScheduledUpgrade && actualForeignSpend < task1TargetSpend) task1TargetSpend else actualForeignSpend
+        val task1Done = isScheduledUpgrade || task1Spend >= task1TargetSpend
+        val task1Prog = if (isScheduledUpgrade) 1f else (task1Spend / task1TargetSpend).toFloat().coerceIn(0f, 1f)
 
-        val task2Bookings = travelTxs.filter { it.entity.amount >= 800.0 }
-        val task2Count = task2Bookings.size
-        val task2Done = task2Count >= task2TargetCount
+        // 任务二：预订机票/邮轮/酒店达 3 次或以上（需单笔满 ¥800 / HKD 800）
+        val task2Bookings = eligibleForeignTxs.filter {
+            (it.entity.category == ExpenseCategory.TRAVEL.code || it.entity.category == "travel_booking") &&
+            it.entity.amount >= 800.0
+        }
+        val actualTask2Count = task2Bookings.size
+        val task2Count = if (isScheduledUpgrade && actualTask2Count < task2TargetCount) task2TargetCount else actualTask2Count
+        val task2Done = isScheduledUpgrade || task2Count >= task2TargetCount
 
         val isReadyToUpgrade = if (isMaxLevel) false else (task1Done && task2Done)
 
-        val effectiveUpgradeMonth = if (isReadyToUpgrade) {
-            val lastQualifyingTx = travelTxs.lastOrNull()
+        val effectiveUpgradeMonth = if (scheduledNextStage != null && scheduledNextStage.startDate.isNotEmpty()) {
+            val sDate = runCatching { LocalDate.parse(scheduledNextStage.startDate) }.getOrNull()
+            if (sDate != null) "${sDate.year}年${sDate.monthValue}月" else "次月"
+        } else if (isReadyToUpgrade) {
+            val lastQualifyingTx = eligibleForeignTxs.lastOrNull()
             val txDate = lastQualifyingTx?.let { runCatching { LocalDate.parse(it.entity.dateTime.substring(0, 10)) }.getOrNull() } ?: now
             val upMonth = txDate.plusMonths(1)
             "${upMonth.year}年${upMonth.monthValue}月"

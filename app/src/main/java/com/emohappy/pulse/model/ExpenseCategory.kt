@@ -7,7 +7,7 @@ enum class ExpenseCategory(val code: String, val displayName: String, val icon: 
 
     companion object {
         fun fromCode(code: String): ExpenseCategory {
-            return entries.firstOrNull { it.code == code } ?: DINING
+            return entries.firstOrNull { it.code == code || (it == TRAVEL && code == "travel_booking") } ?: DINING
         }
     }
 }
