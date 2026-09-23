@@ -449,4 +449,101 @@ class PulseCalculatorEngineTest {
         assertTrue(guruState.allCycles.contains("第 2 轮"))
         assertEquals(3400.0, guruState.totalHistoricalGuruRC, 0.001) // 300 + 800 + 1800 + 500 = 3400
     }
+
+    @Test
+    fun test2025ChinaSpendQuarterlyRulesAndDiningNotLimited() {
+        val settings = UserSettings(
+            redReward = false,
+            rhCnSpend = true,
+            chinaDining = true,
+            welcome = false
+        )
+
+        // 2025 Q3 (8月): 消费 ¥12,000 日常 + ¥6,000 餐饮
+        // 2025 全年为季度全类别内地签账模式，单季达标 10,000 后全品类享 3%，季上限 500 RC
+        val txDaily2025 = TransactionEntity(
+            id = "tx_2025_daily",
+            dateTime = "2025-08-10T12:00",
+            amount = 12000.0,
+            channel = PaymentChannel.UNIONPAY_APP.code,
+            category = ExpenseCategory.DAILY.code
+        )
+        val txDining2025 = TransactionEntity(
+            id = "tx_2025_dining",
+            dateTime = "2025-08-15T18:00",
+            amount = 6000.0,
+            channel = PaymentChannel.UNIONPAY_APP.code,
+            category = ExpenseCategory.DINING.code
+        )
+
+        val result = PulseCalculatorEngine.recalculate(
+            listOf(txDaily2025, txDining2025),
+            settings,
+            java.time.YearMonth.of(2025, 8)
+        )
+
+        val pDaily = result.transactions.first { it.entity.id == "tx_2025_daily" }
+        val pDining = result.transactions.first { it.entity.id == "tx_2025_dining" }
+
+        // 日常 12000 * 3% = 360 RC (季封顶 500，还剩 140)
+        assertEquals(360.0, pDaily.breakdownDetail.rcRhCn, 0.001)
+        // 餐饮 6000 * 3% = 180 -> 受季上限 500 限制分得剩余 140 RC，绝非受月 80 RC 限制！
+        assertEquals(140.0, pDining.breakdownDetail.rcRhCn, 0.001)
+        // 验证 2025 年不激活月度餐饮加码模式
+        assertFalse(result.summary.isH2DiningActive)
+        assertEquals(2025, result.summary.targetYear)
+    }
+
+    @Test
+    fun testAnnualIsolationForPulseAndRedReward() {
+        val settings = UserSettings(
+            redReward = true,
+            pulseResetMidYear = true,
+            rhCnSpend = false,
+            chinaDining = false,
+            welcome = false
+        )
+
+        // 2025年 3月：消费 ¥80,000 (Apple Pay)
+        val tx2025 = TransactionEntity(
+            id = "tx_2025",
+            dateTime = "2025-03-10T10:00",
+            amount = 80000.0,
+            channel = PaymentChannel.APPLE_PAY.code,
+            category = ExpenseCategory.DAILY.code
+        )
+
+        // 2026年 3月：消费 ¥50,000 (Apple Pay)
+        val tx2026 = TransactionEntity(
+            id = "tx_2026",
+            dateTime = "2026-03-10T10:00",
+            amount = 50000.0,
+            channel = PaymentChannel.APPLE_PAY.code,
+            category = ExpenseCategory.DAILY.code
+        )
+
+        // 1. 测算 2026 年 3 月
+        val result2026 = PulseCalculatorEngine.recalculate(
+            listOf(tx2025, tx2026),
+            settings,
+            java.time.YearMonth.of(2026, 3)
+        )
+        // 2026 H1 Pulse 2% = 50,000 * 2% = 1000 RC (未受 2025 年 80,000 消费影响)
+        assertEquals(1000.0, result2026.summary.pulseH1UsedRC, 0.001)
+        // 2026 最红 2% = 50,000 * 2% = 1000 RC (年上限 2000 RC，独立于 2025)
+        assertEquals(1000.0, result2026.summary.redUsedRC, 0.001)
+        assertEquals(2026, result2026.summary.targetYear)
+
+        // 2. 切换回 2025 年 3 月查看看板
+        val result2025 = PulseCalculatorEngine.recalculate(
+            listOf(tx2025, tx2026),
+            settings,
+            java.time.YearMonth.of(2025, 3)
+        )
+        // 2025 H1 Pulse 2% = 80,000 * 2% = 1600 RC
+        assertEquals(1600.0, result2025.summary.pulseH1UsedRC, 0.001)
+        // 2025 最红 2% = 80,000 * 2% = 1600 RC (封顶 2000 内)
+        assertEquals(1600.0, result2025.summary.redUsedRC, 0.001)
+        assertEquals(2025, result2025.summary.targetYear)
+    }
 }

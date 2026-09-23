@@ -24,10 +24,10 @@ object PulseCalculatorEngine {
         val sorted = transactions.sortedBy { it.dateTime }
         val systemAwards = mutableListOf<SystemAward>()
 
-        var cumPulseRC = 0.0
-        var cumPulseH1RC = 0.0
-        var cumPulseH2RC = 0.0
-        var cumRedRC = 0.0
+        val pulseH1ByYear = mutableMapOf<Int, Double>()
+        val pulseH2ByYear = mutableMapOf<Int, Double>()
+        val pulseYearlyByYear = mutableMapOf<Int, Double>()
+        val redByYear = mutableMapOf<Int, Double>()
         val cumGuruRCByStageId = mutableMapOf<String, Double>()
 
         val dRatePercent = settings.diningRate
@@ -56,10 +56,15 @@ object PulseCalculatorEngine {
                 val qIndex = (month - 1) / 3 + 1
                 val qKey = "$year-Q$qIndex"
 
-                // 仅上半年 (1~6月) 采用季度全类别内地签账门槛模式
-                if (month <= 6) {
-                    val hConfig = settings.rhCnH1Config
-                    val isEligible = hConfig.enabled && (hConfig.regDate.isEmpty() || txDateStr >= hConfig.regDate)
+                // 2025 全年以及 2026 上半年 (1~6月) 采用季度全类别内地签账门槛模式
+                val isQuarterMode = (year < 2026) || (year == 2026 && month <= 6)
+                if (isQuarterMode) {
+                    val isEligible = if (year == 2026) {
+                        val hConfig = settings.rhCnH1Config
+                        hConfig.enabled && (hConfig.regDate.isEmpty() || txDateStr >= hConfig.regDate)
+                    } else {
+                        true // 2025年及历史年份按活动正常计入
+                    }
                     if (isEligible) {
                         quarterlyCnSpendStats[qKey] = (quarterlyCnSpendStats[qKey] ?: 0.0) + amt
                     }
@@ -70,8 +75,10 @@ object PulseCalculatorEngine {
         val monthlyUnlocked = monthlyTotalStats.mapValues { (_, spend) ->
             spend >= diningMinSpend
         }
-        val quarterlyUnlocked = quarterlyCnSpendStats.mapValues { (_, spend) ->
-            spend >= settings.rhCnH1Config.quarterSpendThreshold
+        val quarterlyUnlocked = quarterlyCnSpendStats.mapValues { (qKey, spend) ->
+            val year = runCatching { qKey.substring(0, 4).toInt() }.getOrDefault(2026)
+            val threshold = if (year == 2026) settings.rhCnH1Config.quarterSpendThreshold else 10000.0
+            spend >= threshold
         }
 
         // 3. 迎新礼周期与阈值计算 (发卡 60 天内)
@@ -98,11 +105,21 @@ object PulseCalculatorEngine {
             val qIndex = (txMonth - 1) / 3 + 1
             val qKey = "$txYear-Q$qIndex"
 
-            val isH2 = (txMonth > 6)
-            val hConfig = if (isH2) settings.rhCnH2Config else settings.rhCnH1Config
-            val phaseIndex = if (isH2) qIndex - 2 else qIndex
-            val phaseName = if (isH2) "H2 P$phaseIndex (年中重置)" else "H1 P$phaseIndex"
-            val qName = "${txYear} Q$qIndex ($phaseName)"
+            val is2026H2Dining = (txYear == 2026 && txMonth > 6) || (txYear > 2026 && txMonth > 6)
+            val phaseIndex = if (is2026H2Dining) qIndex - 2 else qIndex
+            val phaseName = if (is2026H2Dining) "H2 P$phaseIndex (年中重置)" else "H1 P$phaseIndex"
+            val qName = if (txYear == 2025) {
+                when (qIndex) {
+                    1 -> "2025 Q1 (最红内地及澳门 P1 · 季上限 360 RC)"
+                    2 -> "2025 Q2 (最红内地及澳门 P2 · 季上限 300 RC)"
+                    3 -> "2025 Q3 (最红内地签账 P1 · 季上限 500 RC)"
+                    else -> "2025 Q4 (最红内地签账 P2 · 季上限 500 RC)"
+                }
+            } else if (txYear == 2026) {
+                "${txYear} Q$qIndex ($phaseName)"
+            } else {
+                "${txYear} Q$qIndex"
+            }
 
             val isMicroPay = (t.channel == PaymentChannel.WECHAT_ALIPAY.code)
             val isMobileUnionPay = (t.channel == PaymentChannel.UNIONPAY_APP.code || t.channel == PaymentChannel.APPLE_PAY.code)
@@ -120,20 +137,26 @@ object PulseCalculatorEngine {
 
             breakdown.add("基础 0.4% (+${String.format("%.2f", rcBase)})")
 
-            // Pulse 2% 移动银联特别奖赏 (仅限 Apple Pay / 云闪付扫码 - 支持年中重置)
+            // Pulse 2% 移动银联特别奖赏 (仅限 Apple Pay / 云闪付扫码 - 按年份及半年度隔离额度池)
             if (isMobileUnionPay) {
                 val rawPulse = amt * 0.02
                 if (settings.pulseResetMidYear) {
-                    val avail = if (txMonth <= 6) {
-                        max(0.0, PULSE_CAP - cumPulseH1RC)
+                    if (txMonth <= 6) {
+                        val curH1 = pulseH1ByYear[txYear] ?: 0.0
+                        val avail = max(0.0, PULSE_CAP - curH1)
+                        rcPulse = min(rawPulse, avail)
+                        pulseH1ByYear[txYear] = curH1 + rcPulse
                     } else {
-                        max(0.0, PULSE_CAP - cumPulseH2RC)
+                        val curH2 = pulseH2ByYear[txYear] ?: 0.0
+                        val avail = max(0.0, PULSE_CAP - curH2)
+                        rcPulse = min(rawPulse, avail)
+                        pulseH2ByYear[txYear] = curH2 + rcPulse
                     }
-                    rcPulse = min(rawPulse, avail)
-                    if (txMonth <= 6) cumPulseH1RC += rcPulse else cumPulseH2RC += rcPulse
                 } else {
-                    rcPulse = min(rawPulse, max(0.0, PULSE_CAP - cumPulseRC))
-                    cumPulseRC += rcPulse
+                    val curYearPulse = pulseYearlyByYear[txYear] ?: 0.0
+                    val avail = max(0.0, PULSE_CAP - curYearPulse)
+                    rcPulse = min(rawPulse, avail)
+                    pulseYearlyByYear[txYear] = curYearPulse + rcPulse
                 }
                 if (rcPulse > 0) {
                     breakdown.add("Pulse 2% (+${String.format("%.2f", rcPulse)})")
@@ -142,12 +165,14 @@ object PulseCalculatorEngine {
                 }
             }
 
-            // 最红自主 2% (赏世界 5X - 全渠道包含微信/支付宝、云闪付、Apple Pay)
+            // 最红自主 2% (赏世界 5X - 按自然年隔离额度池，年上限 2,000 RC)
             if (settings.redReward) {
-                if (settings.redRegDate.isEmpty() || txDateStr >= settings.redRegDate) {
+                val isRedEligible = settings.redRegDate.isEmpty() || txYear < 2026 || txDateStr >= settings.redRegDate
+                if (isRedEligible) {
+                    val curYearRed = redByYear[txYear] ?: 0.0
                     val rawRed = amt * 0.02
-                    rcRed = min(rawRed, max(0.0, RED_CAP - cumRedRC))
-                    cumRedRC += rcRed
+                    rcRed = min(rawRed, max(0.0, RED_CAP - curYearRed))
+                    redByYear[txYear] = curYearRed + rcRed
                     if (rcRed > 0) {
                         breakdown.add("最红 2% (+${String.format("%.2f", rcRed)})")
                     } else if (rawRed > 0) {
@@ -156,41 +181,56 @@ object PulseCalculatorEngine {
                 }
             }
 
-            // 最红中国内地签账奖赏 (RH CN Spend) - 上半年与下半年合二为一
+            // 最红中国内地签账奖赏 (RH CN Spend) - 2025 全年与 2026 H1 季度全类别 / 2026 H2 月度餐饮
             val isRhCnActive = settings.rhCnSpend || settings.chinaDining
             if (isRhCnActive && isCnSpend) {
-                if (!isH2) {
-                    // 上半年 (H1: 1~6月)：季度全类别消费达标模式 (P1: Q1 / P2: Q2)
-                    val hConfig = settings.rhCnH1Config
-                    if (hConfig.enabled) {
-                        val isReg = hConfig.regDate.isEmpty() || txDateStr >= hConfig.regDate
-                        val inDateRange = isReg && (settings.rhCnSpendEndDate.isEmpty() || txDateStr <= settings.rhCnSpendEndDate)
-                        if (inDateRange) {
-                            val curQuarterAwarded = quarterlyAwardedRC[qKey] ?: 0.0
-                            val rawRhCn = amt * (hConfig.ratePercent / 100.0)
-                            val potentialRhCn = min(rawRhCn, max(0.0, hConfig.quarterCapRC - curQuarterAwarded))
-
-                            val isQUnlocked = quarterlyUnlocked[qKey] == true
-                            if (isQUnlocked) {
-                                rcRhCn = potentialRhCn
-                                quarterlyAwardedRC[qKey] = curQuarterAwarded + rcRhCn
-                                if (rcRhCn > 0) {
-                                    breakdown.add("最红内地 ${hConfig.ratePercent.toInt()}% [${qName}已达标] (+${String.format("%.2f", rcRhCn)})")
-                                } else if (rawRhCn > 0) {
-                                    breakdown.add("最红内地已达季封顶 (+0.00)")
-                                }
-                            } else {
-                                rcRhCnPending = potentialRhCn
-                                if (rcRhCnPending > 0) {
-                                    breakdown.add("最红内地 ${hConfig.ratePercent.toInt()}% [待本季满¥${hConfig.quarterSpendThreshold.toInt()}] (待+${String.format("%.2f", rcRhCnPending)})")
-                                }
+                if (!is2026H2Dining) {
+                    // 2025 全年，或 2026 上半年 (1~6月)：季度全类别内地消费达标模式
+                    val isReg = if (txYear < 2026) true else (settings.rhCnH1Config.regDate.isEmpty() || txDateStr >= settings.rhCnH1Config.regDate)
+                    val inDateRange = if (txYear == 2026) {
+                        isReg && (settings.rhCnSpendEndDate.isEmpty() || txDateStr <= settings.rhCnSpendEndDate)
+                    } else {
+                        isReg
+                    }
+                    if (inDateRange) {
+                        val qCap = if (txYear == 2026) {
+                            settings.rhCnH1Config.quarterCapRC
+                        } else if (txYear == 2025) {
+                            when (qIndex) {
+                                1 -> 360.0
+                                2 -> 300.0
+                                else -> 500.0
                             }
-                        } else if (!isReg) {
-                            breakdown.add("最红内地未登记 (${hConfig.halfYearName}需于${hConfig.regDate}后生效)")
+                        } else {
+                            300.0
                         }
+                        val qThreshold = if (txYear == 2026) settings.rhCnH1Config.quarterSpendThreshold else 10000.0
+                        val qRatePercent = if (txYear == 2026) settings.rhCnH1Config.ratePercent else 3.0
+
+                        val curQuarterAwarded = quarterlyAwardedRC[qKey] ?: 0.0
+                        val rawRhCn = amt * (qRatePercent / 100.0)
+                        val potentialRhCn = min(rawRhCn, max(0.0, qCap - curQuarterAwarded))
+
+                        val isQUnlocked = quarterlyUnlocked[qKey] == true
+                        if (isQUnlocked) {
+                            rcRhCn = potentialRhCn
+                            quarterlyAwardedRC[qKey] = curQuarterAwarded + rcRhCn
+                            if (rcRhCn > 0) {
+                                breakdown.add("最红内地 ${qRatePercent.toInt()}% [${qName}已达标] (+${String.format("%.2f", rcRhCn)})")
+                            } else if (rawRhCn > 0) {
+                                breakdown.add("最红内地已达季封顶 (+0.00)")
+                            }
+                        } else {
+                            rcRhCnPending = potentialRhCn
+                            if (rcRhCnPending > 0) {
+                                breakdown.add("最红内地 ${qRatePercent.toInt()}% [待本季满¥${qThreshold.toInt()}] (待+${String.format("%.2f", rcRhCnPending)})")
+                            }
+                        }
+                    } else if (!isReg) {
+                        breakdown.add("最红内地未登记 (${settings.rhCnH1Config.halfYearName}需于${settings.rhCnH1Config.regDate}后生效)")
                     }
                 } else {
-                    // 下半年 (H2: 7~12月 · 年中规则调整)：仅限合资格餐饮签账享受额外 3%
+                    // 下半年 (2026 H2: 7~12月 · 年中规则调整)：仅限合资格餐饮签账享受额外 3%
                     if (t.category == ExpenseCategory.DINING.code && !isMicroPay) {
                         val inDateRange = (settings.chinaDiningDate.isEmpty() || txDateStr >= settings.chinaDiningDate) &&
                                 (settings.chinaDiningEndDate.isEmpty() || txDateStr <= settings.chinaDiningEndDate)
@@ -262,8 +302,8 @@ object PulseCalculatorEngine {
                 }
             }
 
-            val unlockedRC = rcBase + rcPulse + rcRed + (if (isH2) rcDining else rcRhCn) + rcGuru
-            val pendingRC = if (isH2) rcDiningPending else rcRhCnPending
+            val unlockedRC = rcBase + rcPulse + rcRed + (if (is2026H2Dining) rcDining else rcRhCn) + rcGuru
+            val pendingRC = if (is2026H2Dining) rcDiningPending else rcRhCnPending
 
             processedTxs.add(
                 ProcessedTransaction(
@@ -309,13 +349,13 @@ object PulseCalculatorEngine {
         // 迎新礼天数与进度
         val daysLeft = max(0L, java.time.temporal.ChronoUnit.DAYS.between(now, expireDate))
 
-        // 最红中国内地签账 (RH CN Spend) 4 季度汇总构建 (含年中重置逻辑)
+        // 最红中国内地签账 (RH CN Spend) 4 季度汇总构建 (含 2025 全年季度模式与 2026 H2 年中重置餐饮逻辑)
         val curYear = targetMonth.year
+        val isCurrentYearDiningMode = (curYear >= 2026)
         val allRhCnQuarters = (1..4).map { q ->
             val qKey = "$curYear-Q$q"
-            val isH2 = (q >= 3)
-            val hIndex = if (isH2) 2 else 1
-            val pIndex = if (isH2) q - 2 else q
+            val isQMonthlyDining = isCurrentYearDiningMode && (q >= 3)
+            val pIndex = if (isQMonthlyDining) q - 2 else q
             val period = when (q) {
                 1 -> "01/01 ~ 03/31"
                 2 -> "04/01 ~ 06/30"
@@ -325,21 +365,43 @@ object PulseCalculatorEngine {
             val payout = when (q) {
                 1 -> "次季度6月入账"
                 2 -> "次季度9月入账"
-                3 -> "次月入账"
-                else -> "次月入账"
+                3 -> if (isQMonthlyDining) "次月入账" else "次季度12月入账"
+                else -> if (isQMonthlyDining) "次月入账" else "次季度次年3月入账"
             }
-            val qName = when (q) {
-                1 -> "$curYear Q1 (H1 P1 · 季度全类别)"
-                2 -> "$curYear Q2 (H1 P2 · 季度全类别)"
-                3 -> "$curYear Q3 (H2 餐饮加赠 · 年中调整)"
-                else -> "$curYear Q4 (H2 餐饮加赠)"
+            val qName = if (curYear == 2025) {
+                when (q) {
+                    1 -> "2025 Q1 (最红内地及澳门 P1 · 季上限 360 RC)"
+                    2 -> "2025 Q2 (最红内地及澳门 P2 · 季上限 300 RC)"
+                    3 -> "2025 Q3 (最红内地签账 P1 · 季上限 500 RC)"
+                    else -> "2025 Q4 (最红内地签账 P2 · 季上限 500 RC)"
+                }
+            } else if (curYear == 2026) {
+                when (q) {
+                    1 -> "2026 Q1 (H1 P1 · 季度全类别)"
+                    2 -> "2026 Q2 (H1 P2 · 季度全类别)"
+                    3 -> "2026 Q3 (H2 餐饮加码 · 年中调整)"
+                    else -> "2026 Q4 (H2 餐饮加码)"
+                }
+            } else {
+                "$curYear Q$q"
             }
-            if (!isH2) {
-                val hConfig = settings.rhCnH1Config
+
+            if (!isQMonthlyDining) {
+                val qThreshold = if (curYear == 2026) settings.rhCnH1Config.quarterSpendThreshold else 10000.0
+                val qCap = if (curYear == 2026) {
+                    settings.rhCnH1Config.quarterCapRC
+                } else if (curYear == 2025) {
+                    when (q) {
+                        1 -> 360.0
+                        2 -> 300.0
+                        else -> 500.0
+                    }
+                } else {
+                    300.0
+                }
+                val qRatePercent = if (curYear == 2026) settings.rhCnH1Config.ratePercent else 3.0
                 val qSpend = quarterlyCnSpendStats[qKey] ?: 0.0
-                val qThreshold = hConfig.quarterSpendThreshold
                 val qEarned = quarterlyAwardedRC[qKey] ?: 0.0
-                val qCap = hConfig.quarterCapRC
                 val isUnlocked = qSpend >= qThreshold
                 val prog = if (!isUnlocked) {
                     if (qThreshold > 0) (qSpend / qThreshold).toFloat().coerceIn(0f, 1f) else 0f
@@ -347,18 +409,18 @@ object PulseCalculatorEngine {
                     if (qCap > 0) (qEarned / qCap).toFloat().coerceIn(0f, 1f) else 0f
                 }
                 val remainingToUnlock = max(0.0, qThreshold - qSpend)
-                val rateDec = hConfig.ratePercent / 100.0
+                val rateDec = qRatePercent / 100.0
                 val remainingToCap = if (rateDec > 0) max(0.0, (qCap - qEarned) / rateDec) else 0.0
 
                 RhCnQuarterStatus(
                     quarterIndex = q,
-                    halfYearIndex = 1,
+                    halfYearIndex = if (q <= 2) 1 else 2,
                     phaseIndex = pIndex,
                     quarterName = qName,
                     periodStr = period,
                     payoutDesc = payout,
                     isMidYearReset = false,
-                    isRegistered = hConfig.enabled,
+                    isRegistered = if (curYear < 2026) true else settings.rhCnH1Config.enabled,
                     currentSpend = qSpend,
                     thresholdSpend = qThreshold,
                     earnedRC = qEarned,
@@ -567,6 +629,16 @@ object PulseCalculatorEngine {
             totalHistoricalGuruRC = totalHistoricalGuruRC
         )
 
+        val curYearPulseH1 = pulseH1ByYear[curYear] ?: 0.0
+        val curYearPulseH2 = pulseH2ByYear[curYear] ?: 0.0
+        val curYearPulseTotal = if (settings.pulseResetMidYear) {
+            if (targetMonth.monthValue <= 6) curYearPulseH1 else curYearPulseH2
+        } else {
+            pulseYearlyByYear[curYear] ?: 0.0
+        }
+        val curYearRed = redByYear[curYear] ?: 0.0
+        val isH2DiningActive = (curYear == 2026 && targetMonth.monthValue >= 7) || (curYear > 2026 && targetMonth.monthValue >= 7)
+
         val summary = DashboardSummary(
             totalUnlockedRC = totalUnlockedRC,
             totalPendingRC = totalPendingRC,
@@ -577,16 +649,14 @@ object PulseCalculatorEngine {
             welcomeRewardRC = totalWelcomeReward,
             welcomeAchieved = welcomeMilestoneTriggered || welcomeCumSpend >= welcomeThreshold,
             welcomeDaysLeft = daysLeft,
-            pulseUsedRC = if (settings.pulseResetMidYear) {
-                if (targetMonth.monthValue <= 6) cumPulseH1RC else cumPulseH2RC
-            } else {
-                cumPulseRC
-            },
+            targetYear = curYear,
+            isH2DiningActive = isH2DiningActive,
+            pulseUsedRC = curYearPulseTotal,
             pulseCapRC = PULSE_CAP,
-            pulseH1UsedRC = cumPulseH1RC,
-            pulseH2UsedRC = cumPulseH2RC,
+            pulseH1UsedRC = curYearPulseH1,
+            pulseH2UsedRC = curYearPulseH2,
             pulseResetMidYear = settings.pulseResetMidYear,
-            redUsedRC = cumRedRC,
+            redUsedRC = curYearRed,
             redCapRC = RED_CAP,
             rhCnStatus = rhCnStatus,
             allRhCnQuarters = allRhCnQuarters,
@@ -627,7 +697,8 @@ object PulseCalculatorEngine {
         }
 
         val testList = currentTransactions + tempTx
-        val result = recalculate(testList, settings)
+        val txMonth = runCatching { YearMonth.parse(tempTx.dateTime.substring(0, 7)) }.getOrDefault(YearMonth.now())
+        val result = recalculate(testList, settings, txMonth)
         val simulated = result.transactions.firstOrNull { it.entity.id == tempTx.id }
             ?: return PreviewResult(0.0, 0.0, 0.0, "")
 

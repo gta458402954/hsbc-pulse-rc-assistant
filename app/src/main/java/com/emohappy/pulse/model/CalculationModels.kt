@@ -80,6 +80,10 @@ data class DashboardSummary(
     val welcomeAchieved: Boolean = false,
     val welcomeDaysLeft: Long = 0,
 
+    // 目标年份与模式
+    val targetYear: Int = 2026,
+    val isH2DiningActive: Boolean = false,
+
     // Pulse 2%
     val pulseUsedRC: Double = 0.0,
     val pulseCapRC: Double = 1600.0,
@@ -95,7 +99,7 @@ data class DashboardSummary(
     val rhCnStatus: RhCnQuarterStatus = RhCnQuarterStatus(),
     val allRhCnQuarters: List<RhCnQuarterStatus> = emptyList(),
 
-    // 当月内地餐饮 (可选旧项)
+    // 当月内地餐饮 (仅在 2026 H2 激活)
     val monthStr: String = "",
     val monthTotalSpend: Double = 0.0,
     val monthDiningSpend: Double = 0.0,

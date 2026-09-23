@@ -104,15 +104,14 @@ fun ProgressSection(
                 Spacer(modifier = Modifier.height(12.dp))
             }
 
-            // 2. 最红中国内地签账奖赏 (RH CN Spend - 1~6月季度全类别 / 7~12月月度餐饮加码)
+            // 2. 最红中国内地签账奖赏 (RH CN Spend - 2025全年及2026H1季度全类别 / 2026H2月度餐饮加码)
             if (settings.rhCnSpend || settings.chinaDining) {
-                val isH2 = summary.rhCnStatus.halfYearIndex == 2
-                if (!isH2) {
+                if (!summary.isH2DiningActive) {
                     val qStatus = summary.rhCnStatus
                     val isUnlocked = qStatus.isUnlocked
                     val cap = qStatus.capRC.toInt()
                     val threshold = qStatus.thresholdSpend.toInt()
-                    val rate = settings.rhCnH1Config.ratePercent.toInt()
+                    val rate = if (summary.targetYear == 2026) settings.rhCnH1Config.ratePercent.toInt() else 3
                     val isRegistered = qStatus.isRegistered
 
                     val valueText = if (!isUnlocked) {
@@ -142,7 +141,7 @@ fun ProgressSection(
                         hintColor = if (isUnlocked) SuccessGreen else WarningOrange
                     )
                 } else {
-                    // 下半年 (7~12月)：规则调整为月度餐饮额外 3%
+                    // 下半年 (2026 H2: 7~12月)：规则调整为月度餐饮额外 3%
                     val isUnlocked = summary.isMonthDiningUnlocked
                     val dRate = settings.diningRate.toInt()
                     val cap = settings.diningMonthlyCap.toInt()
@@ -186,27 +185,39 @@ fun ProgressSection(
                 Spacer(modifier = Modifier.height(12.dp))
             }
 
-            // 4. Pulse 2% 特别奖赏 (含年中重置标识)
-            val pulseProgress = (summary.pulseUsedRC / summary.pulseCapRC).toFloat().coerceIn(0f, 1f)
-            val pulseTitle = if (summary.pulseResetMidYear) {
-                val halfName = if (summary.rhCnStatus.halfYearIndex == 1) "上半年" else "下半年 · 年中重置"
-                "⚡ Pulse 2% 特别奖赏 ($halfName 封顶 1,600 RC)"
+            // 4. Pulse 2% 特别奖赏 (拆分上半年与下半年分别展示)
+            if (summary.pulseResetMidYear) {
+                val h1Prog = (summary.pulseH1UsedRC / summary.pulseCapRC).toFloat().coerceIn(0f, 1f)
+                ProgressItem(
+                    title = "⚡ Pulse 2% 上半年 (1~6月 · 封顶 1,600 RC)",
+                    valueText = "${String.format("%.1f", summary.pulseH1UsedRC)} / 1,600 RC (${(h1Prog * 100).toInt()}%)",
+                    progress = h1Prog,
+                    progressColor = HsbcRed
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+                val h2Prog = (summary.pulseH2UsedRC / summary.pulseCapRC).toFloat().coerceIn(0f, 1f)
+                ProgressItem(
+                    title = "⚡ Pulse 2% 下半年 (7~12月 · 年中重置 · 封顶 1,600 RC)",
+                    valueText = "${String.format("%.1f", summary.pulseH2UsedRC)} / 1,600 RC (${(h2Prog * 100).toInt()}%)",
+                    progress = h2Prog,
+                    progressColor = HsbcRed
+                )
             } else {
-                "⚡ Pulse 2% 特别奖赏 (年上限 1,600 RC)"
+                val pulseProgress = (summary.pulseUsedRC / summary.pulseCapRC).toFloat().coerceIn(0f, 1f)
+                ProgressItem(
+                    title = "⚡ Pulse 2% 特别奖赏 (${summary.targetYear}年 · 年上限 1,600 RC)",
+                    valueText = "${String.format("%.1f", summary.pulseUsedRC)} / 1,600 RC (${(pulseProgress * 100).toInt()}%)",
+                    progress = pulseProgress,
+                    progressColor = HsbcRed
+                )
             }
-            ProgressItem(
-                title = pulseTitle,
-                valueText = "${String.format("%.1f", summary.pulseUsedRC)} / 1,600 RC (${(pulseProgress * 100).toInt()}%)",
-                progress = pulseProgress,
-                progressColor = HsbcRed
-            )
 
-            // 5. 最红自主 2%
+            // 5. 最红自主 2% (按自然年动态联动)
             if (settings.redReward) {
                 Spacer(modifier = Modifier.height(12.dp))
                 val redProgress = (summary.redUsedRC / summary.redCapRC).toFloat().coerceIn(0f, 1f)
                 ProgressItem(
-                    title = "🌍 最红自主 2% (年上限 2,000 RC)",
+                    title = "🌍 最红自主 2% (${summary.targetYear}年 · 年上限 2,000 RC)",
                     valueText = "${String.format("%.1f", summary.redUsedRC)} / 2,000 RC (${(redProgress * 100).toInt()}%)",
                     progress = redProgress,
                     progressColor = BlueSky
