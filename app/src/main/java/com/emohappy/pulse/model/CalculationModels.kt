@@ -82,6 +82,7 @@ data class DashboardSummary(
 
     // 目标年份与模式
     val targetYear: Int = 2026,
+    val targetMonth: Int = 1,
     val isH2DiningActive: Boolean = false,
 
     // Pulse 2%

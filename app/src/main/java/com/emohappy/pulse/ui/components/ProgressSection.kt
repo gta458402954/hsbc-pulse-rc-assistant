@@ -185,23 +185,25 @@ fun ProgressSection(
                 Spacer(modifier = Modifier.height(12.dp))
             }
 
-            // 4. Pulse 2% 特别奖赏 (拆分上半年与下半年分别展示)
+            // 4. Pulse 2% 特别奖赏 (切换到 1~6 月显示上半年进度条，7~12 月显示下半年进度条)
             if (summary.pulseResetMidYear) {
-                val h1Prog = (summary.pulseH1UsedRC / summary.pulseCapRC).toFloat().coerceIn(0f, 1f)
-                ProgressItem(
-                    title = "⚡ Pulse 2% 上半年 (1~6月 · 封顶 1,600 RC)",
-                    valueText = "${String.format("%.1f", summary.pulseH1UsedRC)} / 1,600 RC (${(h1Prog * 100).toInt()}%)",
-                    progress = h1Prog,
-                    progressColor = HsbcRed
-                )
-                Spacer(modifier = Modifier.height(10.dp))
-                val h2Prog = (summary.pulseH2UsedRC / summary.pulseCapRC).toFloat().coerceIn(0f, 1f)
-                ProgressItem(
-                    title = "⚡ Pulse 2% 下半年 (7~12月 · 年中重置 · 封顶 1,600 RC)",
-                    valueText = "${String.format("%.1f", summary.pulseH2UsedRC)} / 1,600 RC (${(h2Prog * 100).toInt()}%)",
-                    progress = h2Prog,
-                    progressColor = HsbcRed
-                )
+                if (summary.targetMonth in 1..6) {
+                    val h1Prog = (summary.pulseH1UsedRC / summary.pulseCapRC).toFloat().coerceIn(0f, 1f)
+                    ProgressItem(
+                        title = "⚡ Pulse 2% 上半年 (${summary.targetYear}年1~6月 · 封顶 1,600 RC)",
+                        valueText = "${String.format("%.1f", summary.pulseH1UsedRC)} / 1,600 RC (${(h1Prog * 100).toInt()}%)",
+                        progress = h1Prog,
+                        progressColor = HsbcRed
+                    )
+                } else {
+                    val h2Prog = (summary.pulseH2UsedRC / summary.pulseCapRC).toFloat().coerceIn(0f, 1f)
+                    ProgressItem(
+                        title = "⚡ Pulse 2% 下半年 (${summary.targetYear}年7~12月 · 年中重置 · 封顶 1,600 RC)",
+                        valueText = "${String.format("%.1f", summary.pulseH2UsedRC)} / 1,600 RC (${(h2Prog * 100).toInt()}%)",
+                        progress = h2Prog,
+                        progressColor = HsbcRed
+                    )
+                }
             } else {
                 val pulseProgress = (summary.pulseUsedRC / summary.pulseCapRC).toFloat().coerceIn(0f, 1f)
                 ProgressItem(

@@ -650,6 +650,7 @@ object PulseCalculatorEngine {
             welcomeAchieved = welcomeMilestoneTriggered || welcomeCumSpend >= welcomeThreshold,
             welcomeDaysLeft = daysLeft,
             targetYear = curYear,
+            targetMonth = targetMonth.monthValue,
             isH2DiningActive = isH2DiningActive,
             pulseUsedRC = curYearPulseTotal,
             pulseCapRC = PULSE_CAP,
